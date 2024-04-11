@@ -18,6 +18,9 @@ matplotlib = "^3.8.4"
 biopython = "^1.83"
 tqdm = "^4.66.2"
 
+[tool.poetry.scripts]
+pdbcor = "pdbcor:cli"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
