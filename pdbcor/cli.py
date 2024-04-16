@@ -6,7 +6,7 @@ from .correlation_extraction import CorrelationExtraction
 
 
 def cli():
-    """CLI script for __main__"""
+    """CLI wrapper around CorrelationExtraction"""
     parser = argparse.ArgumentParser(
         description="Correlation extraction from multistate protein bundles"
     )
@@ -35,14 +35,17 @@ def cli():
     parser.add_argument("--loop_start", type=int, default=-1, help="Start of the loop")
     parser.add_argument("--loop_end", type=int, default=-1, help="End of the loop")
     args = parser.parse_args()
+
     # create correlations folder
     cor_path = os.path.join(os.path.dirname(args.bundle), "correlations")
     os.makedirs(cor_path, exist_ok=True)
+
     # write parameters of the correlation extraction
     args_dict = vars(args)
     args_path = os.path.join(cor_path, "args.json")
     with open(args_path, "w") as outfile:
         json.dump(args_dict, outfile)
+
     # correlation mode
     if args.mode == "backbone":
         modes = ["backbone"]
@@ -55,6 +58,7 @@ def cli():
     else:
         modes = []
         parser.error("Mode has to be either backbone, sidechain, combined or full")
+
     for mode in modes:
         print(
             "###############################################################################\n"

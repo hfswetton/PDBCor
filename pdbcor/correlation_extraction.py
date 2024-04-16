@@ -47,6 +47,7 @@ class CorrelationExtraction:
         self.aaS = 0
         self.aaF = 0
         self.nstates = nstates  # number of states
+
         # CREATE CORRELATION ESTIMATORS WITH STRUCTURE ANG CLUSTERING MODEL
         if input_file_format is None:
             structure_parser = (
@@ -80,8 +81,9 @@ class CorrelationExtraction:
         )
         self.angCor = AngleCor(self.structure, mode, nstates, clust_model)
 
-    # calculate information gain between 2 clustering sets
     def calc_ami(self, clusters, banres):
+        """Calculate information gain between 2 clustering sets"""
+
         # calculate mutual information
         ami_list = []
         for i in tqdm(range(clusters.shape[0])):
@@ -89,6 +91,7 @@ class CorrelationExtraction:
                 cor = adjusted_mutual_info_score(clusters[i, 1:], clusters[j, 1:])
                 ami_list += list(clusters[i, :1]) + list(clusters[j, :1]) + [cor]
         ami_list = np.array(ami_list).reshape(-1, 3)
+
         # construct correlation matrix
         ami_matrix = np.zeros(
             (int(self.aaF - self.aaS + 1), int(self.aaF - self.aaS + 1))
@@ -107,6 +110,7 @@ class CorrelationExtraction:
             ami_matrix[
                 int(ami_list[i, 1] - self.aaS), int(ami_list[i, 0] - self.aaS)
             ] = ami_list[i, 2]
+
         return ami_list, ami_matrix
 
     def calc_cor(self, graphics=True):
@@ -133,8 +137,8 @@ class CorrelationExtraction:
             )
             self.calc_cor_chain(chain, chain_path, self.resid, graphics)
 
-    # execute correlation extraction
     def calc_cor_chain(self, chain, chainPath, resid, graphics):
+        """Execute correlation extraction"""
         # extract angle correlation matrices
         print()
         print()
@@ -220,8 +224,9 @@ class CorrelationExtraction:
         print("DONE")
         print()
 
-    # write a file with correlation parameters
     def write_correlations(self, dist_ami, ang_ami, best_clust, path):
+        """Write a file with correlation parameters"""
+
         # correlation parameters
         dist_cor = np.mean(dist_ami[:, 2])
         ang_cor = np.mean(ang_ami[:, 2])
@@ -241,8 +246,8 @@ class CorrelationExtraction:
         with open(os.path.join(path, "results.json"), "w") as outfile:
             json.dump(result_dist, outfile)
 
-    # construct a chimera executive to view a colored bundle
     def color_pdb(self, best_clust, path):
+        """Construct a chimera executive to view a colored bundle"""
         state_color = ["#00FFFF", "#00008b", "#FF00FF", "#FFFF00", "#000000"]
         chimera_path = os.path.join(path, "bundle_vis_" + self.mode + ".py")
         with open(chimera_path, "w") as f:
@@ -259,8 +264,8 @@ class CorrelationExtraction:
                     )
                 )
 
-    # plot the correlation matrix heatmap
     def plot_heatmaps(self, hm, path):
+        """Plot the correlation matrix heatmap"""
         # change color map to display nans as gray
         cmap = copy(get_cmap("viridis"))
         cmap.set_bad("gray")
@@ -282,9 +287,9 @@ class CorrelationExtraction:
         plt.savefig(path, dpi=300, bbox_inches="tight")
         plt.close()
 
-    # plot histogram of correlation parameter
     @staticmethod
     def plot_hist(ami, path):
+        """Plot histogram of correlation parameter"""
         # plot distance correlation histogram
         start = np.floor(min(ami[:, 2]) * 50) / 50
         nbreaks = int((1 - start) / 0.02) + 1
@@ -298,8 +303,8 @@ class CorrelationExtraction:
         plt.savefig(path, dpi=300, bbox_inches="tight")
         plt.close()
 
-    # create subplot
     def custom_bar_subplot(self, cor_seq, ax, ind):
+        """Create subplot"""
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
         range_loc = range(
@@ -342,8 +347,8 @@ class CorrelationExtraction:
         if ind == np.ceil(len(cor_seq) / 50) - 1:
             ax.set_xlabel("Residue ID")
 
-    # custom bar plot
     def custom_bar_plot(self, hm, path):
+        """Custom bar plot"""
         cor_seq = np.mean(np.nan_to_num(hm), axis=0)
         fig, axs = plt.subplots(
             nrows=int(np.ceil(len(cor_seq) / 50)),
