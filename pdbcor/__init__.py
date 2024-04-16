@@ -7,6 +7,7 @@ from copy import copy
 import matplotlib
 import numpy as np
 import pandas as pd
+from Bio.PDB import MMCIFParser
 from Bio.PDB.PDBParser import PDBParser  # pdb extraction
 from Bio.PDB.Polypeptide import is_aa
 from matplotlib import pyplot as plt  # Plotting library
@@ -26,6 +27,7 @@ class CorrelationExtraction:
     # constructor
     def __init__(self,
                  path,
+                 input_file_format=None,
                  mode='backbone',
                  nstates=2,
                  therm_fluct=0.5,
@@ -43,7 +45,15 @@ class CorrelationExtraction:
         self.aaF = 0
         self.nstates = nstates  # number of states
         # CREATE CORRELATION ESTIMATORS WITH STRUCTURE ANG CLUSTERING MODEL
-        self.structure = PDBParser().get_structure('test', path)
+        if input_file_format is None:
+            structure_parser = PDBParser() if os.path.splitext(self.PDBfilename)[1] == ".pdb" else MMCIFParser()
+        elif input_file_format.lower() == "mmcif":
+            structure_parser = MMCIFParser()
+        elif input_file_format.lower() == "pdb":
+            structure_parser = PDBParser()
+        else:
+            raise ValueError(f'Invalid structure file format: {input_file_format}')
+        self.structure = structure_parser.get_structure('test', path)
         self.chains = []
         for chain in self.structure[0].get_chains():
             self.chains.append(chain.id)
@@ -298,6 +308,10 @@ def cli():
     parser = argparse.ArgumentParser(description='Correlation extraction from multistate protein bundles')
     parser.add_argument('bundle', type=str,
                         help='protein bundle file path')
+    parser.add_argument('--format', type=str,
+                        default='',
+                        help='Input file format (or leave blank to determine from file extension)',
+                        choices=['PDB', 'mmCIF'])
     parser.add_argument('--nstates', type=int,
                         default=2,
                         help='number of states')
@@ -348,6 +362,7 @@ def cli():
         print('###############################################################################')
         print()
         a = CorrelationExtraction(args.bundle,
+                                  input_file_format=(args.format if len(args.format) > 0 else None),
                                   mode=mode,
                                   nstates=args.nstates,
                                   therm_fluct=args.therm_fluct,
