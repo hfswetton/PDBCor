@@ -5,16 +5,19 @@ from tqdm import tqdm
 
 class DistanceCor:
     """Distance-based correlation estimator"""
+
     # constructor
-    def __init__(self,
-                 structure,
-                 mode,
-                 nstates,
-                 clust_model,
-                 pose_estimator,
-                 therm_fluct,
-                 loop_start,
-                 loop_end):
+    def __init__(
+        self,
+        structure,
+        mode,
+        nstates,
+        clust_model,
+        pose_estimator,
+        therm_fluct,
+        loop_start,
+        loop_end,
+    ):
         # HYPERVARIABLES
         self.nstates = nstates  # number of states
         self.clust_model = clust_model
@@ -25,19 +28,21 @@ class DistanceCor:
         # IMPORT THE STRUCTURE
         self.structure = structure
         self.mode = mode
-        self.backboneAtoms = ['N', 'H', 'CA', 'HA', 'HA2', 'HA3', 'C', 'O']
+        self.backboneAtoms = ["N", "H", "CA", "HA", "HA2", "HA3", "C", "O"]
         self.banres = []
+        self.resid = []
+        self.coord_matrix = np.empty((0, 0))
 
     # get a center of mass of a given residue
     def get_coord(self, res):
         coord = []
         atom_number = 0
         for atom in res.get_atoms():
-            if self.mode == 'backbone':
+            if self.mode == "backbone":
                 if atom.id in self.backboneAtoms:
                     atom_number += 1
                     coord += list(atom.get_coord())
-            elif self.mode == 'sidechain':
+            elif self.mode == "sidechain":
                 if atom.id not in self.backboneAtoms:
                     atom_number += 1
                     coord += list(atom.get_coord())
@@ -59,9 +64,9 @@ class DistanceCor:
             model_coord = []
             for res in chain.get_residues():
                 if is_aa(res, standard=True):
-                    if not (self.mode == 'sidechain' and
-                            res.get_resname() == 'GLY') and not \
-                            (self.loop_end >= res.id[1] >= self.loop_start):
+                    if not (
+                        self.mode == "sidechain" and res.get_resname() == "GLY"
+                    ) and not (self.loop_end >= res.id[1] >= self.loop_start):
                         model_coord.append(self.get_coord(res))
                     else:
                         self.banres += [res.id[1]]
@@ -76,22 +81,30 @@ class DistanceCor:
             for i in range(len(self.resid)):
                 if i != ind:
                     # calculate an euclidean distance between residue centers
-                    dist = np.sqrt(np.sum((self.CM[model][ind] - self.CM[model][i]) ** 2))
+                    dist = np.sqrt(
+                        np.sum(
+                            (
+                                self.coord_matrix[model][ind]
+                                - self.coord_matrix[model][i]
+                            )
+                            ** 2
+                        )
+                    )
                     # save the distance
                     features += [dist]
         # scale features down to the unit norm and rearange into the feature matrix
-        features = features / np.linalg.norm(np.array(features))
-        features = np.array(features).reshape(len(self.structure), -1)
+        features = np.array(features) / np.linalg.norm(np.array(features))
+        features = features.reshape(len(self.structure), -1)
         # clustering
         return list(self.clust_model.fit_predict(features))
 
     # get clustering matrix
     def clust_cor(self, chain, resid):
         self.resid = resid
-        self.CM = self.get_coord_matrix(chain)
+        self.coord_matrix = self.get_coord_matrix(chain)
         self.resid = [i for i in self.resid if i not in self.banres]
         clusters = []
-        print('DISTANCE CLUSTERING PROCESS:')
+        print("DISTANCE CLUSTERING PROCESS:")
         for i in tqdm(range(len(self.resid))):
             if self.resid[i] in self.banres:
                 clusters += [self.resid[i]] + list(np.zeros(len(self.structure)))
@@ -103,26 +116,26 @@ class DistanceCor:
 # angle correlations estimator
 class AngleCor:
     """Angle-based correlation estimator"""
+
     # constructor
     def __init__(self, structure, mode, nstates, clust_model):
         # HYPERVARIABLES
         self.nstates = nstates  # number of states
         self.clustModel = clust_model
         self.structure = structure
+        self.nConf = len(self.structure)  # number of PDB models
         self.structure.atom_to_internal_coordinates()
-        allowedAngles = {
-            'backbone': ['phi', 'psi'],
-            'sidechain': ['chi1', 'chi2', 'chi3', 'chi4', 'chi5'],
-            'combined': ['phi', 'psi', 'chi1', 'chi2', 'chi3', 'chi4', 'chi5']
+        allowed_angles = {
+            "backbone": ["phi", "psi"],
+            "sidechain": ["chi1", "chi2", "chi3", "chi4", "chi5"],
+            "combined": ["phi", "psi", "chi1", "chi2", "chi3", "chi4", "chi5"],
         }
-        bannedResDict = {
-            'backbone': [],
-            'sidechain': ['GLY', 'ALA'],
-            'combined': []
-        }
-        self.bannedRes = bannedResDict[mode]
-        self.angleDict = allowedAngles[mode]
+        banned_res_dict = {"backbone": [], "sidechain": ["GLY", "ALA"], "combined": []}
+        self.bannedRes = banned_res_dict[mode]
+        self.angleDict = allowed_angles[mode]
         self.banres = []
+        self.resid = []
+        self.angle_data = np.empty((0, 0))
 
     # collect angle data
     def get_angle_data(self, chainID):
@@ -132,8 +145,7 @@ class AngleCor:
             for res in chain.get_residues():
                 if is_aa(res, standard=True):
                     if res.internal_coord and res.get_resname() not in self.bannedRes:
-                        entry = [res.get_full_id()[1],
-                                 res.id[1]]
+                        entry = [res.get_full_id()[1], res.id[1]]
                         for angle in self.angleDict:
                             entry += [res.internal_coord.get_angle(angle)]
                         entry = [0 if v is None else v for v in entry]
@@ -152,7 +164,7 @@ class AngleCor:
         ang_max_id = np.argmax(np.diff(ang_cycled))
         ang_max = ang_sort[ang_max_id]
         ang_shift = ang + 360 - ang_max
-        ang_shift = [v - 360 if v > 360 else v for v in ang_shift]
+        ang_shift = np.array([v - 360 if v > 360 else v for v in ang_shift])
         return ang_shift - np.mean(ang_shift)
 
     # execute clustering of single residue
@@ -171,11 +183,9 @@ class AngleCor:
     def clust_cor(self, chain, resid):
         self.angle_data = self.get_angle_data(chain)
         self.resid = resid
-        # extract number of pdb models
-        self.nConf = len(self.structure)
         # collect all clusterings
         clusters = []
-        print('ANGLE CLUSTERING PROCESS:')
+        print("ANGLE CLUSTERING PROCESS:")
         for i in tqdm(range(len(self.resid))):
             clusters += [self.resid[i]]
             clusters += list(self.clust_aa(self.resid[i]))
