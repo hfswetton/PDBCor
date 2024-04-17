@@ -29,6 +29,7 @@ class CorrelationExtraction:
         self,
         path: str | os.PathLike,
         input_file_format: Optional[str] = None,
+        output_directory: Optional[str | os.PathLike] = None,
         mode: str = "backbone",
         nstates: int = 2,
         therm_fluct: float = 0.5,
@@ -38,10 +39,12 @@ class CorrelationExtraction:
     ):
         """Initialize the `CorrelationExtraction` object and clustering estimators."""
         # HYPERVARIABLES
-        directory = "correlations"
         self.mode = mode
-        self.savePath = os.path.join(os.path.dirname(path), directory)
         self.PDBfilename = os.path.basename(path)
+        if output_directory is None or output_directory == "":
+            output_directory = f"correlations_{os.path.splitext(self.PDBfilename)[0]}"
+        self.savePath = os.path.join(os.path.dirname(path), output_directory)
+        os.makedirs(self.savePath, exist_ok=True)
         self.therm_iter = therm_iter
         self.resid = []
         self.aaS = 0
