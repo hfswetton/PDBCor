@@ -12,8 +12,8 @@ from Bio.PDB.Polypeptide import is_aa
 from matplotlib import pyplot as plt  # Plotting library
 from matplotlib.cm import get_cmap
 from matplotlib.ticker import FormatStrFormatter, MultipleLocator, AutoMinorLocator
-from sklearn.metrics import adjusted_mutual_info_score
-from sklearn.mixture import GaussianMixture
+from sklearn.metrics import adjusted_mutual_info_score  # type: ignore
+from sklearn.mixture import GaussianMixture  # type: ignore
 from tqdm import tqdm
 
 from .estimators import DistanceCor, AngleCor
