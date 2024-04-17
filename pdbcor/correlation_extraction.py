@@ -8,9 +8,9 @@ import matplotlib
 import numpy as np
 import pandas as pd
 from Bio.PDB import MMCIFParser
-from Bio.PDB.PDBParser import PDBParser  # pdb extraction
+from Bio.PDB.PDBParser import PDBParser
 from Bio.PDB.Polypeptide import is_aa
-from matplotlib import pyplot as plt  # Plotting library
+from matplotlib import pyplot as plt
 from matplotlib.cm import get_cmap
 from matplotlib.ticker import FormatStrFormatter, MultipleLocator, AutoMinorLocator
 from sklearn.metrics import adjusted_mutual_info_score  # type: ignore
@@ -229,7 +229,7 @@ class CorrelationExtraction:
         # write correlation parameters
         self.write_correlations(dist_ami, ang_ami, best_clust, chainPath)
         # create a chimera executable
-        self.color_pdb(best_clust, chainPath)
+        self.write_chimera_script(best_clust, chainPath)
         # plot everything
         if graphics:
             print("PLOTTING")
@@ -291,7 +291,9 @@ class CorrelationExtraction:
         with open(os.path.join(path, "results.json"), "w") as outfile:
             json.dump(result_dist, outfile)
 
-    def color_pdb(self, best_clust: np.ndarray, path: str | os.PathLike) -> None:
+    def write_chimera_script(
+        self, best_clust: np.ndarray, path: str | os.PathLike
+    ) -> None:
         """Construct a Chimera script to view the calculated states in color."""
         state_color = ["#00FFFF", "#00008b", "#FF00FF", "#FFFF00", "#000000"]
         chimera_path = os.path.join(path, "bundle_vis_" + self.mode + ".py")
