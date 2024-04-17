@@ -292,8 +292,16 @@ class CorrelationExtraction:
             "dist_cor": np.around(dist_cor, 4),
             "ang_cor": np.around(ang_cor, 4),
         }
-        with open(os.path.join(path, "results.json"), "w") as outfile:
-            json.dump(result_dist, outfile)
+        with open(os.path.join(path, f"results_{self.mode}.json"), "w") as outfile:
+            json.dump(
+                {
+                    "distribution": result_dist,
+                    "cluster_assignment": {
+                        i + 1: int(best_clust[i]) for i in range(len(self.structure))
+                    },
+                },
+                outfile,
+            )
 
     def write_chimera_script(
         self, best_clust: np.ndarray, path: str | os.PathLike
