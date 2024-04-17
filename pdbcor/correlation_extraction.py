@@ -197,8 +197,9 @@ class CorrelationExtraction:
         df.to_csv(chainPath + "/dist_ami_" + self.mode + ".csv", index=False)
         # write correlation parameters
         self.write_correlations(dist_ami, ang_ami, best_clust, chainPath)
-        # create a chimera executable
+        # create visualisation scripts
         self.write_chimera_script(best_clust, chainPath)
+        self.write_pymol_script(best_clust, chainPath)
         # plot everything
         if graphics:
             print("PLOTTING")
@@ -249,7 +250,7 @@ class CorrelationExtraction:
     def write_chimera_script(self, best_clust, path):
         """Construct a chimera script to view the calculated clusters in separate colours"""
         state_color = ["#00FFFF", "#00008b", "#FF00FF", "#FFFF00", "#000000"]
-        chimera_path = os.path.join(path, "bundle_vis_" + self.mode + ".py")
+        chimera_path = os.path.join(path, "bundle_vis_chimera_" + self.mode + ".py")
         with open(chimera_path, "w") as f:
             f.write("from chimera import runCommand as rc\n")
             f.write('rc("open ../../{}")\n'.format(self.PDBfilename))
@@ -263,6 +264,23 @@ class CorrelationExtraction:
                         state_color[int(best_clust[i])], int(i + 1)
                     )
                 )
+
+    def write_pymol_script(self, best_clust, path):
+        """Construct a PyMOL script to view the calculated clusters in separate colours"""
+        state_color = ["0x00FFFF", "0x00008b", "0xFF00FF", "0xFFFF00", "0x000000"]
+        pymol_path = os.path.join(path, "bundle_vis_pymol_" + self.mode + ".pml")
+        with open(pymol_path, "w") as f:
+            f.write(f"load ../../{self.PDBfilename}\n")
+            f.write("bg_color white\n")
+            f.write("hide\n")
+            f.write("show ribbon\n")
+            f.write("set all_states, true\n")
+            f.writelines(
+                [
+                    f"set ribbon_color, {state_color[int(best_clust[i])]}, all, {i+1}\n"
+                    for i in range(len(self.structure))
+                ]
+            )
 
     def plot_heatmaps(self, hm, path):
         """Plot the correlation matrix heatmap"""
