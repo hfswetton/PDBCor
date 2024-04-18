@@ -122,7 +122,6 @@ class DistanceCor:
         """Get clustering matrix"""
         self.resid = resid
         self.coord_matrix = self._residue_coords(chain)
-        self.resid = [i for i in self.resid if i not in self.banres]
         clusters = []
         print("DISTANCE CLUSTERING PROCESS:")
         for i in tqdm(range(len(self.resid))):
