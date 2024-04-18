@@ -64,11 +64,11 @@ class DistanceCor:
         coord += np.random.normal(0, self.therm_fluct / np.sqrt(atom_number), 3)
         return coord
 
-    def get_coord_matrix(self, chainID: int) -> np.ndarray:
+    def get_coord_matrix(self, chain_id: str) -> np.ndarray:
         """Get coordinates of all residues"""
         coord_list = []
         for model in self.structure.get_models():
-            chain = model[chainID]
+            chain = model[chain_id]
             model_coord = []
             for res in chain.get_residues():
                 if is_aa(res, standard=True):

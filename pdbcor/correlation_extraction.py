@@ -62,7 +62,7 @@ class CorrelationExtraction:
         else:
             raise ValueError(f"Invalid structure file format: {input_file_format}")
         self.structure = structure_parser.get_structure("test", path)
-        self.chains = [chain.id for chain in self.structure[0].get_chains()]
+        self.chain_ids = [chain.id for chain in self.structure[0].get_chains()]
         clust_model = GaussianMixture(
             n_components=self.nstates, n_init=25, covariance_type="diag"
         )
@@ -121,7 +121,7 @@ class CorrelationExtraction:
             os.path.join(os.path.dirname(os.path.realpath(__file__)), "README.txt"),
             os.path.join(self.savePath, "README.txt"),
         )
-        for chain in self.chains:
+        for chain in self.chain_ids:
             chain_path = os.path.join(self.savePath, "chain" + chain)
             os.makedirs(chain_path, exist_ok=True)
             self.resid = []
