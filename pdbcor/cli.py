@@ -80,3 +80,9 @@ def cli():
         args_path = os.path.join(a.savePath, "args.json")
         with open(args_path, "w") as outfile:
             json.dump(args_dict, outfile)
+
+        # write parameters of the correlation extraction
+        args_dict = vars(args)
+        args_path = os.path.join(a.savePath, "args.json")
+        with open(args_path, "w") as outfile:
+            json.dump(args_dict, outfile)
