@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 
 class DistanceCor:
-    """Distance-based correlation estimator"""
+    """Distance-based clustering"""
 
     def __init__(
         self,
@@ -39,7 +39,7 @@ class DistanceCor:
         self.resid = []
         self.coord_matrix = np.empty((0, 0))
 
-    def get_coord(self, res: Residue) -> np.ndarray:
+    def _residue_center(self, res: Residue) -> np.ndarray:
         """Calculate the center of mass of a given residue"""
         coord = []
         atom_number = 0
@@ -64,7 +64,7 @@ class DistanceCor:
         coord += np.random.normal(0, self.therm_fluct / np.sqrt(atom_number), 3)
         return coord
 
-    def get_coord_matrix(self, chain_id: str) -> np.ndarray:
+    def _residue_coords(self, chain_id: str) -> np.ndarray:
         """Get coordinates of all residues"""
         coord_list = []
         for model in self.structure.get_models():
@@ -75,7 +75,7 @@ class DistanceCor:
                     if not (
                         self.mode == "sidechain" and res.get_resname() == "GLY"
                     ) and not (self.loop_end >= res.id[1] >= self.loop_start):
-                        model_coord.append(self.get_coord(res))
+                        model_coord.append(self._residue_center(res))
                     else:
                         self.banres.append(res.id[1])
                         model_coord.append([0, 0, 0])
@@ -112,7 +112,7 @@ class DistanceCor:
     def clust_cor(self, chain: str, resid: List[int]) -> Tuple[np.ndarray, List[int]]:
         """Get clustering matrix"""
         self.resid = resid
-        self.coord_matrix = self.get_coord_matrix(chain)
+        self.coord_matrix = self._residue_coords(chain)
         self.resid = [i for i in self.resid if i not in self.banres]
         clusters = []
         print("DISTANCE CLUSTERING PROCESS:")
@@ -128,7 +128,7 @@ class DistanceCor:
 
 # angle correlations estimator
 class AngleCor:
-    """Angle-based correlation estimator"""
+    """Angle-based clustering"""
 
     def __init__(
         self,
@@ -155,7 +155,7 @@ class AngleCor:
         self.resid = []
         self.angle_data = np.empty((0, 0))
 
-    def get_angle_data(self, chainID: str) -> np.ndarray:
+    def _all_residues_angles(self, chainID: str) -> np.ndarray:
         """Collect angle data"""
         angles = []
         for model in self.structure.get_models():
@@ -170,7 +170,7 @@ class AngleCor:
                         angles.extend(entry)
         return np.array(angles).reshape(-1, 2 + len(self.angleDict))
 
-    def group_aa(self, aa_id: int) -> np.ndarray:
+    def _single_residue_angles(self, aa_id: int) -> np.ndarray:
         """Gather angles from one amino acid"""
         return self.angle_data[self.angle_data[:, 1] == aa_id, 2:]
 
@@ -187,7 +187,7 @@ class AngleCor:
 
     def _clust_aa(self, aa_id: int) -> np.ndarray:
         """Execute clustering of single residue"""
-        aa_data = self.group_aa(aa_id)
+        aa_data = self._single_residue_angles(aa_id)
         if aa_data.shape == (0, 5):
             self.banres.append(aa_id)
             return np.zeros(self.nConf)
@@ -199,7 +199,7 @@ class AngleCor:
 
     def clust_cor(self, chain: str, resid: List[int]) -> Tuple[np.ndarray, List[int]]:
         """Get clustering matrix"""
-        self.angle_data = self.get_angle_data(chain)
+        self.angle_data = self._all_residues_angles(chain)
         self.resid = resid
         # collect all clusterings
         clusters = []
