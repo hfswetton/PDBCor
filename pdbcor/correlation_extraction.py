@@ -17,7 +17,7 @@ from sklearn.metrics import adjusted_mutual_info_score  # type: ignore
 from sklearn.mixture import GaussianMixture  # type: ignore
 from tqdm import tqdm
 
-from .estimators import DistanceCor, AngleCor
+from .clustering import DistanceCor, AngleCor
 
 matplotlib.use("agg")
 
