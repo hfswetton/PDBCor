@@ -2,6 +2,7 @@ import json
 import os
 import shutil
 from copy import copy
+from typing import List, Tuple, Optional
 
 import matplotlib
 import numpy as np
@@ -22,21 +23,20 @@ matplotlib.use("agg")
 
 
 class CorrelationExtraction:
-    """
-    Main wrapper class for correlation extraction
-    """
+    """Main wrapper class for correlation extraction."""
 
     def __init__(
         self,
-        path,
-        input_file_format=None,
-        mode="backbone",
-        nstates=2,
-        therm_fluct=0.5,
-        therm_iter=5,
-        loop_start=-1,
-        loop_end=-1,
+        path: str | os.PathLike,
+        input_file_format: Optional[str] = None,
+        mode: str = "backbone",
+        nstates: int = 2,
+        therm_fluct: float = 0.5,
+        therm_iter: int = 5,
+        loop_start: int = -1,
+        loop_end: int = -1,
     ):
+        """Initialize the `CorrelationExtraction` object and prepare estimators."""
         # HYPERVARIABLES
         directory = "correlations"
         self.mode = mode
@@ -81,8 +81,10 @@ class CorrelationExtraction:
         )
         self.angCor = AngleCor(self.structure, mode, nstates, clust_model)
 
-    def calc_ami(self, clusters, banres):
-        """Calculate information gain between 2 clustering sets"""
+    def calc_ami(
+        self, clusters: np.ndarray, banres: List
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Calculate adjusted mutual information between 2 clustering sets."""
 
         # calculate mutual information
         ami_list = []
@@ -113,7 +115,7 @@ class CorrelationExtraction:
 
         return ami_list, ami_matrix
 
-    def calc_cor(self, graphics=True):
+    def calc_cor(self, graphics: bool = True) -> None:
         # write readme file
         shutil.copyfile(
             os.path.join(os.path.dirname(os.path.realpath(__file__)), "README.txt"),
@@ -137,7 +139,9 @@ class CorrelationExtraction:
             )
             self.calc_cor_chain(chain, chain_path, self.resid, graphics)
 
-    def calc_cor_chain(self, chain, chainPath, resid, graphics):
+    def calc_cor_chain(
+        self, chain: str, chainPath: str | os.PathLike, resid: List[int], graphics: bool
+    ) -> None:
         """Execute correlation extraction"""
         # extract angle correlation matrices
         print()
@@ -224,7 +228,13 @@ class CorrelationExtraction:
         print("DONE")
         print()
 
-    def write_correlations(self, dist_ami, ang_ami, best_clust, path):
+    def write_correlations(
+        self,
+        dist_ami: np.ndarray,
+        ang_ami: np.ndarray,
+        best_clust: np.ndarray,
+        path: str | os.PathLike,
+    ) -> None:
         """Write a file with correlation parameters"""
 
         # correlation parameters
@@ -246,7 +256,7 @@ class CorrelationExtraction:
         with open(os.path.join(path, "results.json"), "w") as outfile:
             json.dump(result_dist, outfile)
 
-    def color_pdb(self, best_clust, path):
+    def color_pdb(self, best_clust: np.ndarray, path: str | os.PathLike) -> None:
         """Construct a chimera executive to view a colored bundle"""
         state_color = ["#00FFFF", "#00008b", "#FF00FF", "#FFFF00", "#000000"]
         chimera_path = os.path.join(path, "bundle_vis_" + self.mode + ".py")
@@ -264,7 +274,7 @@ class CorrelationExtraction:
                     )
                 )
 
-    def plot_heatmaps(self, hm, path):
+    def plot_heatmaps(self, hm: np.ndarray, path: str | os.PathLike) -> None:
         """Plot the correlation matrix heatmap"""
         # change color map to display nans as gray
         cmap = copy(get_cmap("viridis"))
@@ -288,7 +298,7 @@ class CorrelationExtraction:
         plt.close()
 
     @staticmethod
-    def plot_hist(ami, path):
+    def plot_hist(ami: np.ndarray, path: str | os.PathLike) -> None:
         """Plot histogram of correlation parameter"""
         # plot distance correlation histogram
         start = np.floor(min(ami[:, 2]) * 50) / 50
@@ -303,7 +313,7 @@ class CorrelationExtraction:
         plt.savefig(path, dpi=300, bbox_inches="tight")
         plt.close()
 
-    def custom_bar_subplot(self, cor_seq, ax, ind):
+    def custom_bar_subplot(self, cor_seq: np.ndarray, ax: plt.Axes, ind: int) -> None:
         """Create subplot"""
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
@@ -347,7 +357,7 @@ class CorrelationExtraction:
         if ind == np.ceil(len(cor_seq) / 50) - 1:
             ax.set_xlabel("Residue ID")
 
-    def custom_bar_plot(self, hm, path):
+    def custom_bar_plot(self, hm: np.ndarray, path: str | os.PathLike) -> None:
         """Custom bar plot"""
         cor_seq = np.mean(np.nan_to_num(hm), axis=0)
         fig, axs = plt.subplots(

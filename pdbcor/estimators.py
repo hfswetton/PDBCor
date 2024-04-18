@@ -1,5 +1,11 @@
+from typing import Tuple, List
+
+import Bio
 import numpy as np
+import sklearn.base
 from Bio.PDB import is_aa
+from Bio.PDB.Structure import Structure
+from Bio.PDB.Residue import Residue
 from tqdm import tqdm
 
 
@@ -8,14 +14,14 @@ class DistanceCor:
 
     def __init__(
         self,
-        structure,
-        mode,
-        nstates,
-        clust_model,
-        pose_estimator,
-        therm_fluct,
-        loop_start,
-        loop_end,
+        structure: Structure,
+        mode: str,
+        nstates: int,
+        clust_model: sklearn.mixture.GaussianMixture,
+        pose_estimator: sklearn.mixture.GaussianMixture,
+        therm_fluct: float,
+        loop_start: int,
+        loop_end: int,
     ):
         # HYPERVARIABLES
         self.nstates = nstates  # number of states
@@ -33,7 +39,7 @@ class DistanceCor:
         self.resid = []
         self.coord_matrix = np.empty((0, 0))
 
-    def get_coord(self, res):
+    def get_coord(self, res: Residue) -> np.ndarray:
         """Calculate the center of mass of a given residue"""
         coord = []
         atom_number = 0
@@ -58,7 +64,7 @@ class DistanceCor:
         coord += np.random.normal(0, self.therm_fluct / np.sqrt(atom_number), 3)
         return coord
 
-    def get_coord_matrix(self, chainID):
+    def get_coord_matrix(self, chainID: int) -> np.ndarray:
         """Get coordinates of all residues"""
         coord_list = []
         for model in self.structure.get_models():
@@ -76,7 +82,7 @@ class DistanceCor:
             coord_list.append(model_coord)
         return np.array(coord_list).reshape(len(self.structure), len(self.resid), 3)
 
-    def clust_aa(self, ind):
+    def clust_aa(self, ind: int) -> List[int]:
         """Cluster conformers according to the distances between the ind residue with other residues"""
         features = []
         for model in range(len(self.structure)):
@@ -103,7 +109,7 @@ class DistanceCor:
         # clustering
         return list(self.clust_model.fit_predict(features))
 
-    def clust_cor(self, chain, resid):
+    def clust_cor(self, chain: str, resid: List[int]) -> Tuple[np.ndarray, List[int]]:
         """Get clustering matrix"""
         self.resid = resid
         self.coord_matrix = self.get_coord_matrix(chain)
@@ -122,8 +128,13 @@ class DistanceCor:
 class AngleCor:
     """Angle-based correlation estimator"""
 
-    # constructor
-    def __init__(self, structure, mode, nstates, clust_model):
+    def __init__(
+        self,
+        structure: Bio.PDB.Structure,
+        mode: str,
+        nstates: int,
+        clust_model: sklearn.mixture.GaussianMixture,
+    ):
         # HYPERVARIABLES
         self.nstates = nstates  # number of states
         self.clustModel = clust_model
@@ -142,7 +153,7 @@ class AngleCor:
         self.resid = []
         self.angle_data = np.empty((0, 0))
 
-    def get_angle_data(self, chainID):
+    def get_angle_data(self, chainID: str) -> np.ndarray:
         """Collect angle data"""
         angles = []
         for model in self.structure.get_models():
@@ -157,12 +168,12 @@ class AngleCor:
                         angles += entry
         return np.array(angles).reshape(-1, 2 + len(self.angleDict))
 
-    def group_aa(self, aa_id):
+    def group_aa(self, aa_id: int) -> np.ndarray:
         """Gather angles from one amino acid"""
         return self.angle_data[self.angle_data[:, 1] == aa_id, 2:]
 
     @staticmethod
-    def correct_cyclic_angle(ang):
+    def correct_cyclic_angle(ang: np.ndarray) -> np.ndarray:
         """Shift angles to avoid clusters spreading over the (-180,180) cyclic coordinate closure"""
         ang_sort = np.sort(ang)
         ang_cycled = np.append(ang_sort, ang_sort[0] + 360)
@@ -172,7 +183,7 @@ class AngleCor:
         ang_shift = np.array([v - 360 if v > 360 else v for v in ang_shift])
         return ang_shift - np.mean(ang_shift)
 
-    def clust_aa(self, aa_id):
+    def clust_aa(self, aa_id: int) -> np.ndarray:
         """Execute clustering of single residue"""
         aa_data = self.group_aa(aa_id)
         if aa_data.shape == (0, 5):
@@ -184,7 +195,7 @@ class AngleCor:
         # CLUSTERING
         return self.clustModel.fit_predict(aa_data)
 
-    def clust_cor(self, chain, resid):
+    def clust_cor(self, chain: str, resid: List[int]) -> Tuple[np.ndarray, List[int]]:
         """Get clustering matrix"""
         self.angle_data = self.get_angle_data(chain)
         self.resid = resid

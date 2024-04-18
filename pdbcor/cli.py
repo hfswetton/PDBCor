@@ -6,7 +6,7 @@ from .correlation_extraction import CorrelationExtraction
 
 
 def cli():
-    """CLI wrapper around CorrelationExtraction"""
+    """Provide a commandline interface to CorrelationExtraction for use as a standalone program."""
     parser = argparse.ArgumentParser(
         description="Correlation extraction from multistate protein bundles"
     )
