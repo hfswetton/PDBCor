@@ -36,7 +36,7 @@ class CorrelationExtraction:
         loop_start: int = -1,
         loop_end: int = -1,
     ):
-        """Initialize the `CorrelationExtraction` object and prepare estimators."""
+        """Initialize the `CorrelationExtraction` object and clustering estimators."""
         # HYPERVARIABLES
         directory = "correlations"
         self.mode = mode
@@ -80,17 +80,27 @@ class CorrelationExtraction:
     def _calc_ami(
         self, clusters: np.ndarray, banres: List
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """Calculate adjusted mutual information between 2 clustering sets."""
+        """
+        Calculate adjusted mutual information between 2 clustering sets in the form of a correlation matrix.
 
-        # calculate mutual information
+        Uses `self.aaS`/`self.aaF` (set by `self.calculate_correlation()`)
+        to specify the shape of the correlation matrix.
+
+        :returns: Tuple of two `ndarray` s containing AMI values
+        in pairwise list form with rows `[ resi_i, resi_j, ami_i_j ]`,
+        and as a matrix
+        """
+        # Calculate mutual information
         ami_list = []
         for i in tqdm(range(clusters.shape[0])):
             for j in range(i + 1, clusters.shape[0]):
                 cor = adjusted_mutual_info_score(clusters[i, 1:], clusters[j, 1:])
-                ami_list.extend(list(clusters[i, :1]))
-                ami_list.extend(list(clusters[j, :1]))
+                ami_list.extend(list(clusters[i, :1]))  # 1st column = residue label
+                ami_list.extend(list(clusters[j, :1]))  # TODO: replace :1 with 0?
                 ami_list.append(cor)
-        ami_list = np.array(ami_list).reshape(-1, 3)
+        ami_list = np.array(ami_list).reshape(
+            -1, 3
+        )  # -> ndarray with rows [ resi_i, resi_j, ami_i_j ]
 
         # construct correlation matrix
         ami_matrix = np.zeros(
@@ -114,7 +124,15 @@ class CorrelationExtraction:
         return ami_list, ami_matrix
 
     def calculate_correlation(self, graphics: bool = True) -> None:
-        """Main function for calculating correlation."""
+        """
+        Main function for calculating correlation.
+
+        Iterates over each chain in `self.chain_ids` and runs `self._calc_cor_chain()`.
+        Saves output for each chain to a separate directory,
+        and copies the file `README.txt` to the parent output directory.
+
+        Also calculates minimum/maximum residue nr. and saves to `self.aaS`/`self.aaF`
+        """
         # write readme file
         shutil.copyfile(
             os.path.join(os.path.dirname(os.path.realpath(__file__)), "README.txt"),
@@ -141,7 +159,17 @@ class CorrelationExtraction:
     def _calc_cor_chain(
         self, chain: str, chainPath: str | os.PathLike, resid: List[int], graphics: bool
     ) -> None:
-        """Execute correlation extraction"""
+        """
+        Execute correlation extraction for a single chain.
+
+        #. Perform angle clustering using `self.angCor`.
+        #. Extract correlations using `self._calc_ami()`.
+        #. Perform distance clustering using `self.distCor`.
+        #. Extract correlations using `self._calc_ami()`.
+        #. Average over `self.therm_iter` replicates.
+        #. Clean up data etc.
+        #. Output data & generate figures.
+        """
         # extract angle correlation matrices
         print()
         print()
@@ -217,10 +245,10 @@ class CorrelationExtraction:
             self.plot_hist(
                 ang_ami, os.path.join(chainPath, "hist_ang_" + self.mode + ".png")
             )
-            self._custom_bar_plot(
+            self._corr_per_resid_bar_plot(
                 dist_hm, os.path.join(chainPath, "seq_dist_" + self.mode + ".png")
             )
-            self._custom_bar_plot(
+            self._corr_per_resid_bar_plot(
                 ang_hm, os.path.join(chainPath, "seq_ang_" + self.mode + ".png")
             )
             shutil.make_archive(self.savePath, "zip", self.savePath + "/")
@@ -234,7 +262,15 @@ class CorrelationExtraction:
         best_clust: np.ndarray,
         path: str | os.PathLike,
     ) -> None:
-        """Write a file with correlation parameters"""
+        """
+        Write files with correlation results.
+
+        * `correlations_{self.mode}.txt`:
+            * Mean AMI values over all pairs of residues
+            * Populations of each state
+        * `results.json`:
+            * Mean AMI values over all pairs of residues
+        """
 
         # correlation parameters
         dist_cor = np.mean(dist_ami[:, 2])
@@ -256,7 +292,7 @@ class CorrelationExtraction:
             json.dump(result_dist, outfile)
 
     def color_pdb(self, best_clust: np.ndarray, path: str | os.PathLike) -> None:
-        """Construct a chimera executive to view a colored bundle"""
+        """Construct a Chimera script to view the calculated states in color."""
         state_color = ["#00FFFF", "#00008b", "#FF00FF", "#FFFF00", "#000000"]
         chimera_path = os.path.join(path, "bundle_vis_" + self.mode + ".py")
         with open(chimera_path, "w") as f:
@@ -274,7 +310,7 @@ class CorrelationExtraction:
                 )
 
     def plot_heatmaps(self, hm: np.ndarray, path: str | os.PathLike) -> None:
-        """Plot the correlation matrix heatmap"""
+        """Plot the correlation matrix as a heatmap."""
         # change color map to display nans as gray
         cmap = copy(get_cmap("viridis"))
         cmap.set_bad("gray")
@@ -298,7 +334,7 @@ class CorrelationExtraction:
 
     @staticmethod
     def plot_hist(ami: np.ndarray, path: str | os.PathLike) -> None:
-        """Plot histogram of correlation parameter"""
+        """Plot a histogram of correlation parameters (from `ndarray` of pairwise AMI values)."""
         # plot distance correlation histogram
         start = np.floor(min(ami[:, 2]) * 50) / 50
         nbreaks = int((1 - start) / 0.02) + 1
@@ -312,8 +348,13 @@ class CorrelationExtraction:
         plt.savefig(path, dpi=300, bbox_inches="tight")
         plt.close()
 
-    def _custom_bar_subplot(self, cor_seq: np.ndarray, ax: plt.Axes, ind: int) -> None:
-        """Create subplot"""
+    def _corr_per_resid_bar_subplot(
+        self, cor_seq: np.ndarray, ax: plt.Axes, ind: int
+    ) -> None:
+        """
+        Create a barplot of average correlation parameters per residue,
+        to be used as a single row in `self._corr_per_resid_bar_plot()`.
+        """
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
         range_loc = range(
@@ -356,8 +397,8 @@ class CorrelationExtraction:
         if ind == np.ceil(len(cor_seq) / 50) - 1:
             ax.set_xlabel("Residue ID")
 
-    def _custom_bar_plot(self, hm: np.ndarray, path: str | os.PathLike) -> None:
-        """Custom bar plot"""
+    def _corr_per_resid_bar_plot(self, hm: np.ndarray, path: str | os.PathLike) -> None:
+        """Save a bar plot of the average correlation parameter for each residue."""
         cor_seq = np.mean(np.nan_to_num(hm), axis=0)
         fig, axs = plt.subplots(
             nrows=int(np.ceil(len(cor_seq) / 50)),
@@ -365,10 +406,10 @@ class CorrelationExtraction:
             figsize=(16, 4 * int(np.ceil(len(cor_seq) / 50))),
         )
         if len(cor_seq) < 50:
-            self._custom_bar_subplot(cor_seq, axs, 0)
+            self._corr_per_resid_bar_subplot(cor_seq, axs, 0)
         else:
             for ind, ax in enumerate(axs):
-                self._custom_bar_subplot(cor_seq, ax, ind)
+                self._corr_per_resid_bar_subplot(cor_seq, ax, ind)
         plt.subplots_adjust(
             left=0.125, bottom=-0.8, right=0.9, top=0.9, wspace=0.2, hspace=0.2
         )

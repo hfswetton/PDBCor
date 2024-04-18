@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 
 class DistanceCor:
-    """Distance-based clustering"""
+    """Distance-based clustering."""
 
     def __init__(
         self,
@@ -30,8 +30,8 @@ class DistanceCor:
         :param nstates: Number of states to use for clustering
         :param clust_model: `GaussianMixture` model to use for clustering
         :param therm_fluct: Parameter for amplitude of thermal noise added to residues
-        :param loop_start:
-        :param loop_end:
+        :param loop_start: Residue nr. for start of loop region to exclude from analysis
+        :param loop_end: Residue nr. for end of loop region to exclude from analysis
         """
         # HYPERVARIABLES
         self.nstates = nstates  # number of states
@@ -49,7 +49,12 @@ class DistanceCor:
         self.coord_matrix = np.empty((0, 0))
 
     def _residue_center(self, res: Residue) -> np.ndarray:
-        """Calculate the center of mass of a given residue"""
+        """
+        Calculate the center of mass of a given residue.
+
+        Only backbone/sidechain coordinates are used if the corresponding correlation mode is set.
+        Thermal noise is added to the resulting coordinates as specified by `self.therm_fluct`.
+        """
         coord = []
         atom_number = 0
         for atom in res.get_atoms():
@@ -74,7 +79,14 @@ class DistanceCor:
         return coord
 
     def _residue_coords(self, chain_id: str) -> np.ndarray:
-        """Get coordinates of all residues"""
+        """
+        Get coordinates of all residues in the specified chain.
+
+        Residues between `self.loop_start` and `self.loop_end` are skipped,
+        as well as glycines if `self.mode == "sidechain"`.
+        The coordinates of these residues are set to `[0, 0, 0]`
+        and they are added to `self.banres`.
+        """
         coord_list = []
         for model in self.structure.get_models():
             chain = model[chain_id]
@@ -92,7 +104,11 @@ class DistanceCor:
         return np.array(coord_list).reshape(len(self.structure), len(self.resid), 3)
 
     def _clust_aa(self, ind: int) -> List[int]:
-        """Cluster conformers according to the distances between the ind residue with other residues"""
+        """
+        Cluster conformers according to the distances between the specified residue and all other residues.
+
+        Euclidean distances are calculated from `self.coord_matrix`, normalized and passed to `self.clust_model`.
+        """
         features = []
         for model in range(len(self.structure)):
             for i in range(len(self.resid)):
@@ -119,7 +135,14 @@ class DistanceCor:
         return list(self.clust_model.fit_predict(features))
 
     def clust_cor(self, chain: str, resid: List[int]) -> Tuple[np.ndarray, List[int]]:
-        """Get clustering matrix"""
+        """
+        Get clustering matrix for the specified chain by calling `self._clust_aa()` on each amino acid.
+
+        Residues in `self.banres` are assigned 0 for each conformer.
+
+        The returned array of clusters has the shape (number of residues, number of conformers + 1).
+        The first column contains residue numbers, all others contain cluster indices.
+        """
         self.resid = resid
         self.coord_matrix = self._residue_coords(chain)
         clusters = []
@@ -136,7 +159,7 @@ class DistanceCor:
 
 # angle correlations estimator
 class AngleCor:
-    """Angle-based clustering"""
+    """Angle-based clustering."""
 
     def __init__(
         self,
@@ -145,6 +168,17 @@ class AngleCor:
         nstates: int,
         clust_model: GaussianMixture,
     ):
+        """
+        Set hypervariables and import structure.
+
+        Structure coordinates are converted from Cartesian to internal
+        using `Structure.atom_to_internal_coordinates()`.
+
+        :param structure: `Structure` object to perform clustering on
+        :param mode: Correlation mode (can be `"backbone"`, `"sidechain"` or `"combined"`)
+        :param nstates: Number of states to use for clustering
+        :param clust_model: `GaussianMixture` model to use for clustering
+        """
         # HYPERVARIABLES
         self.nstates = nstates  # number of states
         self.clustModel = clust_model
@@ -164,7 +198,12 @@ class AngleCor:
         self.angle_data = np.empty((0, 0))
 
     def _all_residues_angles(self, chainID: str) -> np.ndarray:
-        """Collect angle data"""
+        """
+        Get angle data for all residues in the specified chain.
+
+        Angles to include are listed in `self.angleDict`.
+        Amino acids specified in `self.bannedRes` are skipped entirely.
+        """
         angles = []
         for model in self.structure.get_models():
             chain = model[chainID]
@@ -179,12 +218,32 @@ class AngleCor:
         return np.array(angles).reshape(-1, 2 + len(self.angleDict))
 
     def _single_residue_angles(self, aa_id: int) -> np.ndarray:
-        """Gather angles from one amino acid"""
+        """
+        Gather angles from one amino acid.
+
+        Angle values are extracted from `self.angle_data`
+        (requires this field to have been filled by `self._all_residues_angles()`).
+        """
         return self.angle_data[self.angle_data[:, 1] == aa_id, 2:]
 
     @staticmethod
     def correct_cyclic_angle(ang: np.ndarray) -> np.ndarray:
-        """Shift angles to avoid clusters spreading over the (-180,180) cyclic coordinate closure"""
+        """
+        Shift angles to avoid clusters spreading over the (-180,180) cyclic coordinate closure.
+
+        Takes & returns an array of angle values (in degrees) from the interval [-180, 180].
+
+        Procedure:
+
+        #. Find the two angles with the largest difference:
+            #. Sort all angles
+            #. Append the smallest angle + 360 to the end of the array
+            #. Calculate the maximum difference between a pair of consecutive values
+        #. Assign the lower of these two to 360 -> "wrapping" occurs over the largest gap
+        #. "Rotate" all other angles correspondingly
+        #. Subtract 360 from any angles > 360 after 3.
+        #. Subtract the mean value of the resulting array, leaving values centered around 0
+        """
         ang_sort = np.sort(ang)
         ang_cycled = np.append(ang_sort, ang_sort[0] + 360)
         ang_max_id = np.argmax(np.diff(ang_cycled))
@@ -194,7 +253,12 @@ class AngleCor:
         return ang_shift - np.mean(ang_shift)
 
     def _clust_aa(self, aa_id: int) -> np.ndarray:
-        """Execute clustering of single residue"""
+        """
+        Cluster conformers according to the distribution of angles within a single residue.
+
+        Angles are calculated via `self._single_residue_angles()` and normalized via `self._correct_cyclic_angle()`.
+        Amino acids containing no angle data are added to `self.banres` and a zero array is returned.
+        """
         aa_data = self._single_residue_angles(aa_id)
         if aa_data.shape == (0, 5):
             self.banres.append(aa_id)
@@ -206,7 +270,16 @@ class AngleCor:
         return self.clustModel.fit_predict(aa_data)
 
     def clust_cor(self, chain: str, resid: List[int]) -> Tuple[np.ndarray, List[int]]:
-        """Get clustering matrix"""
+        """
+        Get clustering matrix for the specified chain by calling `self._clust_aa()` on each amino acid.
+
+        Residues in `self.banres` are listed in the returned tuple,
+        however they are not treated differently here,
+        as `self._clust_aa()` automatically identifies them and returns a zero array.
+
+        The returned array of clusters has the shape (number of residues, number of conformers + 1).
+        The first column contains residue numbers, all others contain cluster indices.
+        """
         self.angle_data = self._all_residues_angles(chain)
         self.resid = resid
         # collect all clusterings
