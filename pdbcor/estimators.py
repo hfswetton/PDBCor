@@ -82,7 +82,7 @@ class DistanceCor:
             coord_list.append(model_coord)
         return np.array(coord_list).reshape(len(self.structure), len(self.resid), 3)
 
-    def clust_aa(self, ind: int) -> List[int]:
+    def _clust_aa(self, ind: int) -> List[int]:
         """Cluster conformers according to the distances between the ind residue with other residues"""
         features = []
         for model in range(len(self.structure)):
@@ -122,7 +122,7 @@ class DistanceCor:
                 clusters.extend(list(np.zeros(len(self.structure))))
             else:
                 clusters.append(self.resid[i])
-                clusters.extend(self.clust_aa(i))
+                clusters.extend(self._clust_aa(i))
         return np.array(clusters).reshape(-1, len(self.structure) + 1), self.banres
 
 
@@ -185,7 +185,7 @@ class AngleCor:
         ang_shift = np.array([v - 360 if v > 360 else v for v in ang_shift])
         return ang_shift - np.mean(ang_shift)
 
-    def clust_aa(self, aa_id: int) -> np.ndarray:
+    def _clust_aa(self, aa_id: int) -> np.ndarray:
         """Execute clustering of single residue"""
         aa_data = self.group_aa(aa_id)
         if aa_data.shape == (0, 5):
@@ -206,5 +206,5 @@ class AngleCor:
         print("ANGLE CLUSTERING PROCESS:")
         for i in tqdm(range(len(self.resid))):
             clusters.append(self.resid[i])
-            clusters.extend(list(self.clust_aa(self.resid[i])))
+            clusters.extend(list(self._clust_aa(self.resid[i])))
         return np.array(clusters).reshape(-1, self.nConf + 1), self.banres

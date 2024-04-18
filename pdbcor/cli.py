@@ -76,4 +76,4 @@ def cli():
             loop_start=args.loop_start,
             loop_end=args.loop_end,
         )
-        a.calc_cor(graphics=args.graphics)
+        a.calculate_correlation(graphics=args.graphics)

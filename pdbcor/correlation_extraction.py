@@ -79,7 +79,7 @@ class CorrelationExtraction:
         )
         self.angCor = AngleCor(self.structure, mode, nstates, clust_model)
 
-    def calc_ami(
+    def _calc_ami(
         self, clusters: np.ndarray, banres: List
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Calculate adjusted mutual information between 2 clustering sets."""
@@ -115,7 +115,8 @@ class CorrelationExtraction:
 
         return ami_list, ami_matrix
 
-    def calc_cor(self, graphics: bool = True) -> None:
+    def calculate_correlation(self, graphics: bool = True) -> None:
+        """Main function for calculating correlation."""
         # write readme file
         shutil.copyfile(
             os.path.join(os.path.dirname(os.path.realpath(__file__)), "README.txt"),
@@ -137,9 +138,9 @@ class CorrelationExtraction:
                 f"#################################   CHAIN {chain}   #################################\n"
                 "################################################################################"
             )
-            self.calc_cor_chain(chain, chain_path, self.resid, graphics)
+            self._calc_cor_chain(chain, chain_path, self.resid, graphics)
 
-    def calc_cor_chain(
+    def _calc_cor_chain(
         self, chain: str, chainPath: str | os.PathLike, resid: List[int], graphics: bool
     ) -> None:
         """Execute correlation extraction"""
@@ -151,7 +152,7 @@ class CorrelationExtraction:
         )
         ang_clusters, ang_banres = self.angCor.clust_cor(chain, resid)
         print("ANGULAR MUTUAL INFORMATION EXTRACTION:")
-        ang_ami, ang_hm = self.calc_ami(ang_clusters, ang_banres)
+        ang_ami, ang_hm = self._calc_ami(ang_clusters, ang_banres)
         # Run a series of thermally corrected distance correlation extractions
         print()
         print()
@@ -164,7 +165,7 @@ class CorrelationExtraction:
         for i in range(self.therm_iter):
             dist_clusters, dist_banres = self.distCor.clust_cor(chain, resid)
             print("DISTANCE MUTUAL INFORMATION EXTRACTION, RUN {}:".format(i + 1))
-            dist_ami_loc, dist_hm_loc = self.calc_ami(dist_clusters, dist_banres)
+            dist_ami_loc, dist_hm_loc = self._calc_ami(dist_clusters, dist_banres)
             if i == 0:
                 dist_ami = dist_ami_loc
                 dist_hm = dist_hm_loc
@@ -218,10 +219,10 @@ class CorrelationExtraction:
             self.plot_hist(
                 ang_ami, os.path.join(chainPath, "hist_ang_" + self.mode + ".png")
             )
-            self.custom_bar_plot(
+            self._custom_bar_plot(
                 dist_hm, os.path.join(chainPath, "seq_dist_" + self.mode + ".png")
             )
-            self.custom_bar_plot(
+            self._custom_bar_plot(
                 ang_hm, os.path.join(chainPath, "seq_ang_" + self.mode + ".png")
             )
             shutil.make_archive(self.savePath, "zip", self.savePath + "/")
@@ -313,7 +314,7 @@ class CorrelationExtraction:
         plt.savefig(path, dpi=300, bbox_inches="tight")
         plt.close()
 
-    def custom_bar_subplot(self, cor_seq: np.ndarray, ax: plt.Axes, ind: int) -> None:
+    def _custom_bar_subplot(self, cor_seq: np.ndarray, ax: plt.Axes, ind: int) -> None:
         """Create subplot"""
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
@@ -357,7 +358,7 @@ class CorrelationExtraction:
         if ind == np.ceil(len(cor_seq) / 50) - 1:
             ax.set_xlabel("Residue ID")
 
-    def custom_bar_plot(self, hm: np.ndarray, path: str | os.PathLike) -> None:
+    def _custom_bar_plot(self, hm: np.ndarray, path: str | os.PathLike) -> None:
         """Custom bar plot"""
         cor_seq = np.mean(np.nan_to_num(hm), axis=0)
         fig, axs = plt.subplots(
@@ -366,10 +367,10 @@ class CorrelationExtraction:
             figsize=(16, 4 * int(np.ceil(len(cor_seq) / 50))),
         )
         if len(cor_seq) < 50:
-            self.custom_bar_subplot(cor_seq, axs, 0)
+            self._custom_bar_subplot(cor_seq, axs, 0)
         else:
             for ind, ax in enumerate(axs):
-                self.custom_bar_subplot(cor_seq, ax, ind)
+                self._custom_bar_subplot(cor_seq, ax, ind)
         plt.subplots_adjust(
             left=0.125, bottom=-0.8, right=0.9, top=0.9, wspace=0.2, hspace=0.2
         )
