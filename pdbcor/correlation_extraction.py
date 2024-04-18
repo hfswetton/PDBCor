@@ -323,7 +323,9 @@ class CorrelationExtraction:
                     )
                 )
 
-    def write_pymol_script(self, best_clust, path):
+    def write_pymol_script(
+        self, best_clust: np.ndarray, path: str | os.PathLike
+    ) -> None:
         """Construct a PyMOL script to view the calculated clusters in separate colours"""
         state_color = ["0x00FFFF", "0x00008b", "0xFF00FF", "0xFFFF00", "0x000000"]
         pymol_path = os.path.join(path, "bundle_vis_pymol_" + self.mode + ".pml")
