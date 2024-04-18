@@ -66,13 +66,11 @@ class CorrelationExtraction:
         clust_model = GaussianMixture(
             n_components=self.nstates, n_init=25, covariance_type="diag"
         )
-        pose_estimator = GaussianMixture(n_init=25, covariance_type="full")
         self.distCor = DistanceCor(
             self.structure,
             mode,
             nstates,
             clust_model,
-            pose_estimator,
             therm_fluct,
             loop_start,
             loop_end,

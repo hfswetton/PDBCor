@@ -18,15 +18,24 @@ class DistanceCor:
         mode: str,
         nstates: int,
         clust_model: GaussianMixture,
-        pose_estimator: GaussianMixture,
         therm_fluct: float,
         loop_start: int,
         loop_end: int,
     ):
+        """
+        Set hypervariables and import structure.
+
+        :param structure: `Structure` object to perform clustering on
+        :param mode: Correlation mode (can be `"backbone"`, `"sidechain"` or `"combined"`)
+        :param nstates: Number of states to use for clustering
+        :param clust_model: `GaussianMixture` model to use for clustering
+        :param therm_fluct: Parameter for amplitude of thermal noise added to residues
+        :param loop_start:
+        :param loop_end:
+        """
         # HYPERVARIABLES
         self.nstates = nstates  # number of states
         self.clust_model = clust_model
-        self.pose_estimator = pose_estimator
         self.therm_fluct = therm_fluct
         self.loop_start = loop_start
         self.loop_end = loop_end
