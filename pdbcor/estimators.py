@@ -2,7 +2,7 @@ from typing import Tuple, List
 
 import Bio
 import numpy as np
-import sklearn.base
+from sklearn.mixture import GaussianMixture
 from Bio.PDB import is_aa
 from Bio.PDB.Structure import Structure
 from Bio.PDB.Residue import Residue
@@ -17,8 +17,8 @@ class DistanceCor:
         structure: Structure,
         mode: str,
         nstates: int,
-        clust_model: sklearn.mixture.GaussianMixture,
-        pose_estimator: sklearn.mixture.GaussianMixture,
+        clust_model: GaussianMixture,
+        pose_estimator: GaussianMixture,
         therm_fluct: float,
         loop_start: int,
         loop_end: int,
@@ -135,7 +135,7 @@ class AngleCor:
         structure: Bio.PDB.Structure,
         mode: str,
         nstates: int,
-        clust_model: sklearn.mixture.GaussianMixture,
+        clust_model: GaussianMixture,
     ):
         # HYPERVARIABLES
         self.nstates = nstates  # number of states
