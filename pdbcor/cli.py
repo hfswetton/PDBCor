@@ -18,6 +18,12 @@ def cli():
         help="Input file format (or leave blank to determine from file extension)",
         choices=["PDB", "mmCIF"],
     )
+    parser.add_argument(
+        "--output",
+        type=str,
+        default="",
+        help='filename for output directory (defaults to "correlations_<name of structure file>")',
+    )
     parser.add_argument("--nstates", type=int, default=2, help="number of states")
     parser.add_argument(
         "--graphics", type=bool, default=True, help="generate graphical output"
@@ -35,16 +41,6 @@ def cli():
     parser.add_argument("--loop_start", type=int, default=-1, help="Start of the loop")
     parser.add_argument("--loop_end", type=int, default=-1, help="End of the loop")
     args = parser.parse_args()
-
-    # create correlations folder
-    cor_path = os.path.join(os.path.dirname(args.bundle), "correlations")
-    os.makedirs(cor_path, exist_ok=True)
-
-    # write parameters of the correlation extraction
-    args_dict = vars(args)
-    args_path = os.path.join(cor_path, "args.json")
-    with open(args_path, "w") as outfile:
-        json.dump(args_dict, outfile)
 
     # correlation mode
     if args.mode == "backbone":
@@ -69,6 +65,7 @@ def cli():
         a = CorrelationExtraction(
             args.bundle,
             input_file_format=(args.format if len(args.format) > 0 else None),
+            output_directory=args.output,
             mode=mode,
             nstates=args.nstates,
             therm_fluct=args.therm_fluct,
@@ -77,3 +74,15 @@ def cli():
             loop_end=args.loop_end,
         )
         a.calculate_correlation(graphics=args.graphics)
+
+        # write parameters of the correlation extraction
+        args_dict = vars(args)
+        args_path = os.path.join(a.savePath, "args.json")
+        with open(args_path, "w") as outfile:
+            json.dump(args_dict, outfile)
+
+        # write parameters of the correlation extraction
+        args_dict = vars(args)
+        args_path = os.path.join(a.savePath, "args.json")
+        with open(args_path, "w") as outfile:
+            json.dump(args_dict, outfile)
