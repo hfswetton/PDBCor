@@ -47,14 +47,14 @@ class DistanceCor:
             if self.mode == "backbone":
                 if atom.id in self.backboneAtoms:
                     atom_number += 1
-                    coord += list(atom.get_coord())
+                    coord.extend(list(atom.get_coord()))
             elif self.mode == "sidechain":
                 if atom.id not in self.backboneAtoms:
                     atom_number += 1
-                    coord += list(atom.get_coord())
+                    coord.extend(list(atom.get_coord()))
             else:
                 atom_number += 1
-                coord += list(atom.get_coord())
+                coord.extend(list(atom.get_coord()))
         coord = np.array(coord).reshape(-1, 3)
 
         # average coordinates of all atoms
@@ -77,7 +77,7 @@ class DistanceCor:
                     ) and not (self.loop_end >= res.id[1] >= self.loop_start):
                         model_coord.append(self.get_coord(res))
                     else:
-                        self.banres += [res.id[1]]
+                        self.banres.append(res.id[1])
                         model_coord.append([0, 0, 0])
             coord_list.append(model_coord)
         return np.array(coord_list).reshape(len(self.structure), len(self.resid), 3)
@@ -100,7 +100,7 @@ class DistanceCor:
                     )
 
                     # save the distance
-                    features += [dist]
+                    features.append(dist)
 
         # scale features down to the unit norm and rearange into the feature matrix
         features = np.array(features) / np.linalg.norm(np.array(features))
@@ -118,9 +118,11 @@ class DistanceCor:
         print("DISTANCE CLUSTERING PROCESS:")
         for i in tqdm(range(len(self.resid))):
             if self.resid[i] in self.banres:
-                clusters += [self.resid[i]] + list(np.zeros(len(self.structure)))
+                clusters.append(self.resid[i])
+                clusters.extend(list(np.zeros(len(self.structure))))
             else:
-                clusters += [self.resid[i]] + self.clust_aa(i)
+                clusters.append(self.resid[i])
+                clusters.extend(self.clust_aa(i))
         return np.array(clusters).reshape(-1, len(self.structure) + 1), self.banres
 
 
@@ -163,9 +165,9 @@ class AngleCor:
                     if res.internal_coord and res.get_resname() not in self.bannedRes:
                         entry = [res.get_full_id()[1], res.id[1]]
                         for angle in self.angleDict:
-                            entry += [res.internal_coord.get_angle(angle)]
+                            entry.append(res.internal_coord.get_angle(angle))
                         entry = [0 if v is None else v for v in entry]
-                        angles += entry
+                        angles.extend(entry)
         return np.array(angles).reshape(-1, 2 + len(self.angleDict))
 
     def group_aa(self, aa_id: int) -> np.ndarray:
@@ -187,7 +189,7 @@ class AngleCor:
         """Execute clustering of single residue"""
         aa_data = self.group_aa(aa_id)
         if aa_data.shape == (0, 5):
-            self.banres += [aa_id]
+            self.banres.append(aa_id)
             return np.zeros(self.nConf)
         # correct the cyclic angle coordinates
         for i in range(len(self.angleDict)):
@@ -203,6 +205,6 @@ class AngleCor:
         clusters = []
         print("ANGLE CLUSTERING PROCESS:")
         for i in tqdm(range(len(self.resid))):
-            clusters += [self.resid[i]]
-            clusters += list(self.clust_aa(self.resid[i]))
+            clusters.append(self.resid[i])
+            clusters.extend(list(self.clust_aa(self.resid[i])))
         return np.array(clusters).reshape(-1, self.nConf + 1), self.banres

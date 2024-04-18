@@ -62,9 +62,7 @@ class CorrelationExtraction:
         else:
             raise ValueError(f"Invalid structure file format: {input_file_format}")
         self.structure = structure_parser.get_structure("test", path)
-        self.chains = []
-        for chain in self.structure[0].get_chains():
-            self.chains.append(chain.id)
+        self.chains = [chain.id for chain in self.structure[0].get_chains()]
         clust_model = GaussianMixture(
             n_components=self.nstates, n_init=25, covariance_type="diag"
         )
@@ -91,7 +89,9 @@ class CorrelationExtraction:
         for i in tqdm(range(clusters.shape[0])):
             for j in range(i + 1, clusters.shape[0]):
                 cor = adjusted_mutual_info_score(clusters[i, 1:], clusters[j, 1:])
-                ami_list += list(clusters[i, :1]) + list(clusters[j, :1]) + [cor]
+                ami_list.extend(list(clusters[i, :1]))
+                ami_list.extend(list(clusters[j, :1]))
+                ami_list.append(cor)
         ami_list = np.array(ami_list).reshape(-1, 3)
 
         # construct correlation matrix
