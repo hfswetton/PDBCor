@@ -15,9 +15,9 @@ from matplotlib.cm import get_cmap
 from matplotlib.ticker import FormatStrFormatter, MultipleLocator, AutoMinorLocator
 from sklearn.metrics import adjusted_mutual_info_score  # type: ignore
 from sklearn.mixture import GaussianMixture  # type: ignore
-from tqdm import tqdm
 
 from .clustering import DistanceCor, AngleCor
+from .console import console
 
 matplotlib.use("agg")
 
@@ -38,6 +38,8 @@ class CorrelationExtraction:
         loop_end: int = -1,
     ):
         """Initialize the `CorrelationExtraction` object and clustering estimators."""
+        console.h1("PDBCor")
+
         # HYPERVARIABLES
         self.mode = mode
         self.PDBfilename = os.path.basename(path)
@@ -52,6 +54,7 @@ class CorrelationExtraction:
         self.nstates = nstates  # number of states
 
         # CREATE CORRELATION ESTIMATORS WITH STRUCTURE ANG CLUSTERING MODEL
+        console.h2("Loading structure file")
         if input_file_format is None:
             structure_parser = (
                 PDBParser()
@@ -95,7 +98,9 @@ class CorrelationExtraction:
         """
         # Calculate mutual information
         ami_list = []
-        for i in tqdm(range(clusters.shape[0])):
+        for i in console.tqdm(
+            range(clusters.shape[0]), desc="Extracting mutual information"
+        ):
             for j in range(i + 1, clusters.shape[0]):
                 cor = adjusted_mutual_info_score(clusters[i, 1:], clusters[j, 1:])
                 ami_list.extend(list(clusters[i, :1]))  # 1st column = residue label
@@ -150,13 +155,7 @@ class CorrelationExtraction:
                     self.resid.append(res.id[1])
             self.aaS = min(self.resid)
             self.aaF = max(self.resid)
-            print()
-            print()
-            print(
-                "################################################################################\n"
-                f"#################################   CHAIN {chain}   #################################\n"
-                "################################################################################"
-            )
+            console.h2(f"Chain {chain}")
             self._calc_cor_chain(chain, chain_path, self.resid, graphics)
 
     def _calc_cor_chain(
@@ -174,26 +173,16 @@ class CorrelationExtraction:
         #. Output data & generate figures.
         """
         # extract angle correlation matrices
-        print()
-        print()
-        print(
-            "#############################   ANGLE CLUSTERING   ############################"
-        )
+        console.h3("Angle clustering")
         ang_clusters, ang_banres = self.angCor.clust_cor(chain, resid)
-        print("ANGULAR MUTUAL INFORMATION EXTRACTION:")
         ang_ami, ang_hm = self._calc_ami(ang_clusters, ang_banres)
         # Run a series of thermally corrected distance correlation extractions
-        print()
-        print()
-        print(
-            "############################   DISTANCE CLUSTERING   ##########################"
-        )
         dist_ami = None
         dist_hm = None
         dist_clusters = None
         for i in range(self.therm_iter):
+            console.h3(f"Distance clustering (run {i})")
             dist_clusters, dist_banres = self.distCor.clust_cor(chain, resid)
-            print("DISTANCE MUTUAL INFORMATION EXTRACTION, RUN {}:".format(i + 1))
             dist_ami_loc, dist_hm_loc = self._calc_ami(dist_clusters, dist_banres)
             if i == 0:
                 dist_ami = dist_ami_loc
@@ -215,12 +204,8 @@ class CorrelationExtraction:
         best_res = [i for i in range(len(ami_sum)) if ami_sum[i] == np.nanmax(ami_sum)]
         best_res = best_res[0]
         best_clust = dist_clusters[best_res, 1:]
-        print()
-        print()
-        print(
-            "############################       FINALIZING       ###########################"
-        )
-        print("PROCESSING CORRELATION MATRICES")
+        console.h3("Finalizing")
+        console.print("Processing correlation matrices...")
         df = pd.DataFrame(ang_ami, columns=["ID1", "ID2", "Correlation"])
         df["ID1"] = df["ID1"].astype("int")
         df["ID2"] = df["ID2"].astype("int")
@@ -236,7 +221,7 @@ class CorrelationExtraction:
         self.write_pymol_script(best_clust, chainPath)
         # plot everything
         if graphics:
-            print("PLOTTING")
+            console.print("Plotting...")
             self.plot_heatmaps(
                 dist_hm, os.path.join(chainPath, "heatmap_dist_" + self.mode + ".png")
             )
@@ -256,8 +241,7 @@ class CorrelationExtraction:
                 ang_hm, os.path.join(chainPath, "seq_ang_" + self.mode + ".png")
             )
             shutil.make_archive(self.savePath, "zip", self.savePath + "/")
-        print("DONE")
-        print()
+        console.print("Done!", style="green")
 
     def write_correlations(
         self,

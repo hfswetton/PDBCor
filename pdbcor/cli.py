@@ -50,14 +50,7 @@ class CLI:
 
     def calculate_correlation(self):
         """Run the correlation extraction for each enabled mode."""
-
         for mode, extractor in zip(self.modes, self.extractors):
-            print(
-                "###############################################################################\n"
-                f"############################   {mode.upper()} CORRELATIONS   ########################\n"
-                "###############################################################################"
-            )
-            print()
             extractor.calculate_correlation(graphics=self.args.graphics)
 
     @classmethod
