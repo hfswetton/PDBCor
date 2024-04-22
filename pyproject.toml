@@ -24,7 +24,7 @@ pandas-stubs = "^2.2.1"
 types-tqdm = "^4.66.0"
 
 [tool.poetry.scripts]
-pdbcor = "pdbcor:cli"
+pdbcor = "pdbcor:CLI.run"
 
 [build-system]
 requires = ["poetry-core"]

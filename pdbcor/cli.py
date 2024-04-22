@@ -5,84 +5,146 @@ import os
 from .correlation_extraction import CorrelationExtraction
 
 
-def cli():
+class CLI:
     """Provide a commandline interface to CorrelationExtraction for use as a standalone program."""
-    parser = argparse.ArgumentParser(
-        description="Correlation extraction from multistate protein bundles"
-    )
-    parser.add_argument("bundle", type=str, help="protein bundle file path")
-    parser.add_argument(
-        "--format",
-        type=str,
-        default="",
-        help="Input file format (or leave blank to determine from file extension)",
-        choices=["PDB", "mmCIF"],
-    )
-    parser.add_argument(
-        "--output",
-        type=str,
-        default="",
-        help='filename for output directory (defaults to "correlations_<name of structure file>")',
-    )
-    parser.add_argument("--nstates", type=int, default=2, help="number of states")
-    parser.add_argument(
-        "--graphics", type=bool, default=True, help="generate graphical output"
-    )
-    parser.add_argument("--mode", type=str, default="backbone", help="correlation mode")
-    parser.add_argument(
-        "--therm_fluct",
-        type=float,
-        default=0.5,
-        help="Thermal fluctuation of distances in the protein bundle",
-    )
-    parser.add_argument(
-        "--therm_iter", type=int, default=5, help="Number of thermal simulations"
-    )
-    parser.add_argument("--loop_start", type=int, default=-1, help="Start of the loop")
-    parser.add_argument("--loop_end", type=int, default=-1, help="End of the loop")
-    args = parser.parse_args()
 
-    # correlation mode
-    if args.mode == "backbone":
-        modes = ["backbone"]
-    elif args.mode == "sidechain":
-        modes = ["sidechain"]
-    elif args.mode == "combined":
-        modes = ["combined"]
-    elif args.mode == "full":
-        modes = ["backbone", "sidechain", "combined"]
-    else:
-        modes = []
-        parser.error("Mode has to be either backbone, sidechain, combined or full")
+    def __init__(self, *args):
+        """
+        Parse current CLI arguments and save to disk, then create list of `CorrelationExtraction` objects.
 
-    for mode in modes:
-        print(
-            "###############################################################################\n"
-            f"############################   {mode.upper()} CORRELATIONS   ########################\n"
-            "###############################################################################"
+        If an optional list of arguments is passed, these will be used instead of the default (`sys.argv`).
+        """
+        parser = self.new_arg_parser()
+        if len(args) > 0:
+            self.args = parser.parse_args(args)
+        else:
+            self.args = parser.parse_args()
+
+        self.modes = (
+            ["backbone", "sidechain", "combined"]
+            if self.args.mode == "full"
+            else [self.args.mode]
         )
-        print()
-        a = CorrelationExtraction(
-            args.bundle,
-            input_file_format=(args.format if len(args.format) > 0 else None),
-            output_directory=args.output,
-            mode=mode,
-            nstates=args.nstates,
-            therm_fluct=args.therm_fluct,
-            therm_iter=args.therm_iter,
-            loop_start=args.loop_start,
-            loop_end=args.loop_end,
-        )
-        a.calculate_correlation(graphics=args.graphics)
 
-        # write parameters of the correlation extraction
-        args_dict = vars(args)
-        args_path = os.path.join(a.savePath, "args.json")
+        self.extractors = [
+            CorrelationExtraction(
+                self.args.bundle,
+                input_file_format=(
+                    self.args.format if len(self.args.format) > 0 else None
+                ),
+                output_directory=self.args.output,
+                mode=mode,
+                nstates=self.args.num_states,
+                therm_fluct=self.args.therm_fluct,
+                therm_iter=self.args.therm_iter,
+                loop_start=self.args.loop_start,
+                loop_end=self.args.loop_end,
+            )
+            for mode in self.modes
+        ]
+
+        args_dict = vars(self.args)
+        args_path = os.path.join(self.extractors[0].savePath, "args.json")
         with open(args_path, "w") as outfile:
             json.dump(args_dict, outfile)
 
-        # write parameters of the correlation extraction
-        args_dict = vars(args)
-        args_path = os.path.join(a.savePath, "args.json")
-        with open(args_path, "w") as outfile:
-            json.dump(args_dict, outfile)
+    def calculate_correlation(self):
+        """Run the correlation extraction for each enabled mode."""
+
+        for mode, extractor in zip(self.modes, self.extractors):
+            print(
+                "###############################################################################\n"
+                f"############################   {mode.upper()} CORRELATIONS   ########################\n"
+                "###############################################################################"
+            )
+            print()
+            extractor.calculate_correlation(graphics=self.args.graphics)
+
+    @classmethod
+    def run(cls):
+        """Run the CLI as a standalone program."""
+        cli = cls()
+        cli.calculate_correlation()
+
+    @staticmethod
+    def new_arg_parser():
+        """Create a new `argparse.ArgumentParser` instance for the CLI."""
+        parser = argparse.ArgumentParser(
+            description="Correlation extraction from multistate protein bundles"
+        )
+
+        parser.add_argument("bundle", type=str, help="protein bundle file path")
+
+        io_args = parser.add_argument_group("input/output settings")
+        io_args.add_argument(
+            "-f",
+            "--format",
+            dest="format",
+            type=str,
+            default="",
+            help="input file format (determined from file extension if not specified)",
+            choices=["PDB", "mmCIF"],
+        )
+        io_args.add_argument(
+            "-o",
+            "--output",
+            dest="output",
+            type=str,
+            default="",
+            help='filename for output directory (defaults to "correlations_<name of structure file>")',
+        )
+        io_args.add_argument(
+            "--nographics",
+            dest="graphics",
+            action="store_false",
+            help="do not generate graphical output",
+        )
+
+        corr_args = parser.add_argument_group("correlation extraction settings")
+        corr_args.add_argument(
+            "-n",
+            "--num-states",
+            dest="num_states",
+            type=int,
+            default=2,
+            help="number of states",
+        )
+        corr_args.add_argument(
+            "-m",
+            "--mode",
+            dest="mode",
+            type=str,
+            default="backbone",
+            help="correlation mode",
+            choices=["backbone", "sidechain", "combined", "full"],
+        )
+        corr_args.add_argument(
+            "-i",
+            "--therm-iter",
+            dest="therm_iter",
+            type=int,
+            default=5,
+            help="number of thermal iterations to average for distance-based correlations",
+        )
+        corr_args.add_argument(
+            "-t",
+            "--therm-fluct",
+            dest="therm_fluct",
+            type=float,
+            default=0.5,
+            help="thermal fluctuation of distances in the protein bundle (scaling factor for added random noise)",
+        )
+        corr_args.add_argument(
+            "--loop-start",
+            type=int,
+            default=-1,
+            help="start of loop to exclude from analysis",
+        )
+        corr_args.add_argument(
+            "--loop-end",
+            type=int,
+            default=-1,
+            help="end of loop to exclude from analysis",
+        )
+
+        return parser
