@@ -54,7 +54,8 @@ class CorrelationExtraction:
         self.nstates = nstates  # number of states
 
         # CREATE CORRELATION ESTIMATORS WITH STRUCTURE ANG CLUSTERING MODEL
-        console.h2("Structure file import")
+        console.h2("Setup")
+        console.h3("Structure file import")
         if input_file_format is None:
             if os.path.splitext(self.PDBfilename)[1] == ".pdb":
                 console.print("PDB format identified.")
@@ -74,12 +75,16 @@ class CorrelationExtraction:
         self.structure = structure_parser.get_structure("test", path)
         self.chain_ids = [chain.id for chain in self.structure[0].get_chains()]
         console.print(
-            f"Structure parsed successfully (identified {len(self.chain_ids)} chains)."
+            "Structure parsed successfully "
+            f"(identified {len(self.chain_ids)} chain{'' if len(self.chain_ids) == 1 else 's'})."
         )
-        console.print("Preparing models for clustering...")
+
+        console.h3("Clustering model initialization")
+        console.print("Initializing GMM...")
         clust_model = GaussianMixture(
             n_components=self.nstates, n_init=25, covariance_type="diag"
         )
+        console.print("Initializing cluster calculators...")
         self.distCor = DistanceCor(
             self.structure,
             mode,
@@ -90,6 +95,7 @@ class CorrelationExtraction:
             loop_end,
         )
         self.angCor = AngleCor(self.structure, mode, nstates, clust_model)
+        console.print("Setup complete.", style="green")
 
     def _calc_ami(
         self, clusters: np.ndarray, banres: List
@@ -189,7 +195,7 @@ class CorrelationExtraction:
         dist_hm = None
         dist_clusters = None
         for i in range(self.therm_iter):
-            console.h3(f"Distance clustering (run {i})")
+            console.h3(f"Distance clustering (run {i+1} of {self.therm_iter})")
             dist_clusters, dist_banres = self.distCor.clust_cor(chain, resid)
             dist_ami_loc, dist_hm_loc = self._calc_ami(dist_clusters, dist_banres)
             if i == 0:

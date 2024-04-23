@@ -1,3 +1,5 @@
+import sys
+
 from rich.console import Console as RichConsole
 from rich.markdown import Markdown
 from tqdm import tqdm as tqdm_base
@@ -38,11 +40,16 @@ class Console(RichConsole):
         return self._Tqdm(*args, outer=self, **kwargs)
 
     class _Tqdm(tqdm_base):
+        kwargs_default = {
+            "file": sys.stdout,
+            "disable": None,
+        }
+
         def __init__(self, *args, outer=None, **kwargs):
             if outer is not None and outer.quiet:
-                super().__init__(*args, disable=True, **kwargs)
-            else:
-                super().__init__(*args, **kwargs)
+                kwargs.update(disable=True)
+
+            super().__init__(*args, **{**self.kwargs_default, **kwargs})
 
 
 console = Console()
