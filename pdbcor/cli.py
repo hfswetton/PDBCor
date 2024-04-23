@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 
+from .console import console
 from .correlation_extraction import CorrelationExtraction
 
 
@@ -19,6 +20,8 @@ class CLI:
             self.args = parser.parse_args(args)
         else:
             self.args = parser.parse_args()
+
+        console.set_quiet(quiet=self.args.quiet)
 
         self.modes = (
             ["backbone", "sidechain", "combined"]
@@ -91,6 +94,12 @@ class CLI:
             dest="graphics",
             action="store_false",
             help="do not generate graphical output",
+        )
+        io_args.add_argument(
+            "-q",
+            "--quiet",
+            action="store_true",
+            help="quiet mode (only output errors to console)",
         )
 
         corr_args = parser.add_argument_group("correlation extraction settings")

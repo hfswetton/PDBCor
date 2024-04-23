@@ -1,9 +1,20 @@
 from rich.console import Console as RichConsole
 from rich.markdown import Markdown
-from tqdm import tqdm
+from tqdm import tqdm as tqdm_base
 
 
 class Console(RichConsole):
+    def __init__(self, *args, **kwargs):
+        self.quiet = False
+        super().__init__(*args, **kwargs)
+
+    def set_quiet(self, quiet=True):
+        self.quiet = quiet
+
+    def print(self, *args, **kwargs):
+        if not self.quiet:
+            super().print(*args, **kwargs)
+
     def _h(self, text, level):
         """Print header with given level (e.g. `h1` for `level = 1`)."""
         if not isinstance(level, int) or not 1 <= level <= 6:
@@ -23,8 +34,15 @@ class Console(RichConsole):
     def h4(self, text):
         self._h(text, 4)
 
-    class tqdm(tqdm):
-        pass
+    def tqdm(self, *args, **kwargs):
+        return self._Tqdm(*args, outer=self, **kwargs)
+
+    class _Tqdm(tqdm_base):
+        def __init__(self, *args, outer=None, **kwargs):
+            if outer is not None and outer.quiet:
+                super().__init__(*args, disable=True, **kwargs)
+            else:
+                super().__init__(*args, **kwargs)
 
 
 console = Console()
