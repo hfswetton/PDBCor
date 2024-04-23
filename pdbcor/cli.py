@@ -75,7 +75,7 @@ class CLI:
             dest="format",
             type=str,
             default="",
-            help="input file format (determined from file extension if not specified)",
+            help="input file format (default: determine from file extension)",
             choices=["PDB", "mmCIF"],
         )
         io_args.add_argument(
@@ -84,7 +84,7 @@ class CLI:
             dest="output",
             type=str,
             default="",
-            help='filename for output directory (defaults to "correlations_<name of structure file>")',
+            help='filename for output directory (default: "correlations_<name of structure file>")',
         )
         io_args.add_argument(
             "--nographics",
@@ -100,7 +100,7 @@ class CLI:
             dest="num_states",
             type=int,
             default=2,
-            help="number of states",
+            help="number of states (default: 2)",
         )
         corr_args.add_argument(
             "-m",
@@ -108,7 +108,7 @@ class CLI:
             dest="mode",
             type=str,
             default="backbone",
-            help="correlation mode",
+            help="correlation mode (default: backbone)",
             choices=["backbone", "sidechain", "combined", "full"],
         )
         corr_args.add_argument(
@@ -117,7 +117,7 @@ class CLI:
             dest="therm_iter",
             type=int,
             default=5,
-            help="number of thermal iterations to average for distance-based correlations",
+            help="number of thermal iterations to average for distance-based correlations (default: 5)",
         )
         corr_args.add_argument(
             "-t",
@@ -125,7 +125,9 @@ class CLI:
             dest="therm_fluct",
             type=float,
             default=0.5,
-            help="thermal fluctuation of distances in the protein bundle (scaling factor for added random noise)",
+            help="thermal fluctuation of distances in the protein bundle "
+            "-> scaling factor for added random noise "
+            "(default: 0.5)",
         )
         corr_args.add_argument(
             "--loop-start",
