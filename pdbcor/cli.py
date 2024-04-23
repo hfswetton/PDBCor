@@ -37,8 +37,8 @@ class CLI:
                 nstates=self.args.num_states,
                 therm_fluct=self.args.therm_fluct,
                 therm_iter=self.args.therm_iter,
-                loop_start=self.args.loop_start,
-                loop_end=self.args.loop_end,
+                loop_start=self.args.loop[0],
+                loop_end=self.args.loop[1],
             )
             for mode in self.modes
         ]
@@ -130,16 +130,11 @@ class CLI:
             "(default: 0.5)",
         )
         corr_args.add_argument(
-            "--loop-start",
+            "--loop",
+            nargs=2,
             type=int,
-            default=-1,
-            help="start of loop to exclude from analysis",
-        )
-        corr_args.add_argument(
-            "--loop-end",
-            type=int,
-            default=-1,
-            help="end of loop to exclude from analysis",
+            default=[-1, -1],
+            help="residue numbers of start & end of loop to exclude from analysis (default: none)",
         )
 
         return parser
