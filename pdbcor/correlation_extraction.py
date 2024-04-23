@@ -54,21 +54,29 @@ class CorrelationExtraction:
         self.nstates = nstates  # number of states
 
         # CREATE CORRELATION ESTIMATORS WITH STRUCTURE ANG CLUSTERING MODEL
-        console.h2("Loading structure file")
+        console.h2("Structure file import")
         if input_file_format is None:
-            structure_parser = (
-                PDBParser()
-                if os.path.splitext(self.PDBfilename)[1] == ".pdb"
-                else MMCIFParser()
-            )
+            if os.path.splitext(self.PDBfilename)[1] == ".pdb":
+                console.print("PDB format identified.")
+                structure_parser = PDBParser()
+            else:
+                console.print("Assuming PDBx/mmCIF format.")
+                structure_parser = MMCIFParser()
         elif input_file_format.lower() == "mmcif":
+            console.print("PDBx/mmCIF format set via CLI.")
             structure_parser = MMCIFParser()
         elif input_file_format.lower() == "pdb":
+            console.print("PDB format set via CLI.")
             structure_parser = PDBParser()
         else:
             raise ValueError(f"Invalid structure file format: {input_file_format}")
+        console.print("Parsing structure file...")
         self.structure = structure_parser.get_structure("test", path)
         self.chain_ids = [chain.id for chain in self.structure[0].get_chains()]
+        console.print(
+            f"Structure parsed successfully (identified {len(self.chain_ids)} chains)."
+        )
+        console.print("Preparing models for clustering...")
         clust_model = GaussianMixture(
             n_components=self.nstates, n_init=25, covariance_type="diag"
         )
