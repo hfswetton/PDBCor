@@ -120,7 +120,6 @@ class CLI:
             help="number of thermal iterations to average for distance-based correlations (default: 5)",
         )
         corr_args.add_argument(
-            "-t",
             "--therm-fluct",
             dest="therm_fluct",
             type=float,
