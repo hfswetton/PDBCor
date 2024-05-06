@@ -7,7 +7,27 @@ authors = [
     "Henry Wetton",
     "Roland Riek",
 ]
+maintainers = [
+    "Dzmitry Ashkinadze",
+    "Henry Wetton",
+]
 readme = "README.md"
+repository = "https://github.com/dzmitryashkinadze/PDBCor"
+keywords = ["protein", "scientific", "correlation", "clustering", "structural biology"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: Scientific/Engineering :: Visualization",
+    "Typing :: Typed",
+]
+
+[tool.poetry.urls]
+"Publication" = "https://doi.org/10.1016/j.str.2021.12.002"
 
 [tool.poetry.dependencies]
 python = ">=3.9"
