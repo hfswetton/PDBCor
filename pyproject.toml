@@ -11,6 +11,7 @@ maintainers = [
     "Dzmitry Ashkinadze",
     "Henry Wetton",
 ]
+license = "AGPL-3.0-only"
 readme = "README.md"
 repository = "https://github.com/dzmitryashkinadze/PDBCor"
 keywords = ["protein", "scientific", "correlation", "clustering", "structural biology"]
@@ -18,6 +19,7 @@ classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
     "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
