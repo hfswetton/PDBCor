@@ -1,4 +1,6 @@
+import json
 import os
+import pickle
 from typing import List, Optional, Union
 
 import matplotlib
@@ -23,6 +25,7 @@ class CorrelationExtraction:
         self,
         pdb_file_path: Union[str, os.PathLike],
         input_file_format: Optional[str] = None,
+        ground_truth_file: Optional[str] = None,
         output_directory: Optional[Union[str, os.PathLike]] = None,
         io_params: Optional[CorrelationExtractionIOParams] = None,
         residue_subset: str = "backbone",
@@ -56,6 +59,11 @@ class CorrelationExtraction:
         self.pdb_file_path: Union[str, os.PathLike] = pdb_file_path
         self.pdb_file_name: Union[str, os.PathLike] = os.path.basename(
             self.pdb_file_path
+        )
+        self.ground_truth_states = (
+            self._import_cluster_list(ground_truth_file)
+            if ground_truth_file is not None
+            else None
         )
         self.io = CorrelationExtractionIO(
             correlation_extraction=self,
@@ -151,7 +159,7 @@ class CorrelationExtraction:
     def uses_distances(self) -> bool:
         return self.features in {"both", "distance"}
 
-    def _calc_ami(self, clusters: np.ndarray, resid: List[int]) -> np.ndarray:
+    def _calc_ami_interres(self, clusters: np.ndarray, resid: List[int]) -> np.ndarray:
         """
         Calculate adjusted mutual information between 2 clustering sets in the form of a correlation list.
 
@@ -176,6 +184,21 @@ class CorrelationExtraction:
             ]
         )
 
+    def _calc_ami_gt(
+        self, clusters: np.ndarray, resid: List[int], ground_truth_states
+    ) -> np.ndarray:
+        return np.vstack(
+            [
+                [
+                    resid[i],
+                    self.correlation_metric(clusters[i, :], ground_truth_states),
+                ]
+                for i in console.tqdm(
+                    range(clusters.shape[0]), desc="Extracting mutual information"
+                )
+            ]
+        )
+
     def _ami_list_to_matrix(
         self, ami_list: np.ndarray, banres: List[int]
     ) -> np.ndarray:
@@ -187,10 +210,16 @@ class CorrelationExtraction:
         Index 0 corresponds to `aaS` and the final row/column to `aaF`,
         with skipped residue numbers within this range being represented by `np.nan`.
 
+        If `ami_list` only has two columns (i.e. was calculated using ground truth clusters),
+        returns a diagonal matrix from the elements of `ami_list`.
+
         :param ami_list: `ndarray` containing AMI values in pairwise list form with rows `[ resi_i, resi_j, ami_i_j ]`
         :param banres: list of excluded residues (set to `NaN`)
         :returns: `ndarray` containing correlations as a 2D matrix
         """
+
+        if ami_list.shape[1] == 2:
+            return np.diag(ami_list[:, 1])
 
         ami_matrix = np.zeros(
             (int(self.aaF - self.aaS + 1), int(self.aaF - self.aaS + 1))
@@ -238,15 +267,18 @@ class CorrelationExtraction:
             self.aaS = min(self.resid)
             self.aaF = max(self.resid)
             console.h2(f"Chain {chain}")
-            self._calc_cor_chain(chain, self.resid)
+            if self.ground_truth_states is None:
+                self._calc_cor_chain_interres(chain, self.resid)
+            else:
+                self._calc_cor_chain_gt(chain, self.resid)
 
         console.h3("Final processing")
         self.io.finalize_analysis()
         console.print("PDBCor complete!", style="green")
 
-    def _calc_cor_chain(self, chain: str, resid: List[int]) -> None:
+    def _calc_cor_chain_interres(self, chain: str, resid: List[int]) -> None:
         """
-        Execute correlation extraction for a single chain.
+        Execute inter-residue correlation extraction for a single chain.
 
         #. Perform angle clustering using `self.angCor`.
         #. Extract correlations using `self._calc_ami()`.
@@ -261,7 +293,9 @@ class CorrelationExtraction:
         )
 
         if self.uses_angles:
-            ang_ami, ang_clusters, ang_hm = self._calc_cor_chain_ang(chain, resid)
+            ang_ami, ang_clusters, ang_hm = self._calc_cor_chain_interres_ang(
+                chain, resid
+            )
             best_ang_clusters = self.best_clusters(ang_hm, ang_clusters)
             output_handler.generate_single_feature_output(
                 corr_list=ang_ami,
@@ -274,7 +308,9 @@ class CorrelationExtraction:
             ang_ami, ang_clusters, ang_hm = None, None, None
 
         if self.uses_distances:
-            dist_ami, dist_clusters, dist_hm = self._calc_cor_chain_dist(chain, resid)
+            dist_ami, dist_clusters, dist_hm = self._calc_cor_chain_interres_dist(
+                chain, resid
+            )
             best_dist_clusters = self.best_clusters(dist_hm, dist_clusters)
             output_handler.generate_single_feature_output(
                 corr_list=dist_ami,
@@ -290,7 +326,54 @@ class CorrelationExtraction:
         output_handler.generate_combined_output(dist_ami, ang_ami, best_dist_clusters)
         console.print(f"Chain {chain} complete!", style="green")
 
-    def _calc_cor_chain_dist(self, chain, resid):
+    def _calc_cor_chain_gt(self, chain: str, resid: List[int]) -> None:
+        """
+        Execute ground-truth-based correlation extraction for a single chain.
+
+        #. Perform angle clustering using `self.angCor`.
+        #. Extract correlations using `self._calc_ami()`.
+        #. Perform distance clustering using `self.distCor`.
+        #. Extract correlations using `self._calc_ami()`.
+        #. Average over `self.therm_iter` replicates.
+        #. Clean up data etc.
+        #. Output data & generate figures.
+        """
+        output_handler = self.io.chain_io(
+            chain_id=chain,
+        )
+
+        if self.uses_angles:
+            ang_ami, ang_clusters, ang_hm = self._calc_cor_chain_gt_ang(chain, resid)
+            output_handler.generate_single_feature_output(
+                corr_list=ang_ami,
+                clusters=ang_clusters,
+                corr_matrix=ang_hm,
+                best_clust=self.ground_truth_states,
+                feature_name=("ang", "angle"),
+            )
+        else:
+            ang_ami, ang_clusters = None, None
+
+        if self.uses_distances:
+            dist_ami, dist_clusters, dist_hm = self._calc_cor_chain_gt_dist(
+                chain, resid
+            )
+            output_handler.generate_single_feature_output(
+                corr_list=dist_ami,
+                clusters=dist_clusters,
+                corr_matrix=dist_hm,
+                best_clust=self.ground_truth_states,
+                feature_name=("dist", "distance"),
+            )
+        else:
+            dist_ami, dist_clusters = None, None
+
+        output_handler.generate_combined_output(
+            dist_ami, ang_ami, self.ground_truth_states
+        )
+        console.print(f"Chain {chain} complete!", style="green")
+
+    def _calc_cor_chain_interres_dist(self, chain, resid):
         assert isinstance(self.dist_clust_calc, DistanceClusterCalculator)
         assert self.therm_iter > 0
 
@@ -303,7 +386,7 @@ class CorrelationExtraction:
         for i in range(self.therm_iter):
             console.h3(f"Distance clustering (run {i + 1} of {self.therm_iter})")
             dist_clusters, dist_banres = self.dist_clust_calc.cluster(chain, resid)
-            dist_ami_loc = self._calc_ami(dist_clusters, resid)
+            dist_ami_loc = self._calc_ami_interres(dist_clusters, resid)
             dist_hm_loc = self._ami_list_to_matrix(dist_ami_loc, dist_banres)
             if i == 0:
                 dist_ami = dist_ami_loc
@@ -324,17 +407,67 @@ class CorrelationExtraction:
 
         return dist_ami, dist_clusters, dist_hm
 
-    def _calc_cor_chain_ang(self, chain, resid):
+    def _calc_cor_chain_interres_ang(self, chain, resid):
         assert isinstance(self.ang_clust_calc, AngleClusterCalculator)
 
         # extract angle correlation matrices
         console.h3("Angle clustering")
         ang_clusters, ang_banres = self.ang_clust_calc.cluster(chain, resid)
-        ang_ami = self._calc_ami(ang_clusters, resid)
+        ang_ami = self._calc_ami_interres(ang_clusters, resid)
         ang_hm = self._ami_list_to_matrix(ang_ami, ang_banres)
 
         # Round to 3 sign. digits
         ang_ami[:, 2] = np.around(ang_ami[:, 2], 4)
+
+        return ang_ami, ang_clusters, ang_hm
+
+    def _calc_cor_chain_gt_dist(self, chain, resid):
+        assert isinstance(self.dist_clust_calc, DistanceClusterCalculator)
+        assert self.therm_iter > 0
+
+        # Initialize arrays as empty to ensure they exist
+        dist_ami = np.empty((0, 0))
+        dist_clusters = np.empty(0)
+
+        # Run a series of thermally corrected distance correlation extractions
+        for i in range(self.therm_iter):
+            console.h3(f"Distance clustering (run {i + 1} of {self.therm_iter})")
+            dist_clusters, dist_banres = self.dist_clust_calc.cluster(chain, resid)
+            dist_ami_loc = self._calc_ami_gt(
+                dist_clusters, resid, self.ground_truth_states
+            )
+            if i == 0:
+                dist_ami = dist_ami_loc
+            else:
+                dist_ami = np.dstack((dist_ami, dist_ami_loc))
+        if dist_ami.size == 0 or dist_clusters.size == 0:
+            raise ValueError("Calculation not completed correctly.")
+
+        # Average over iterations
+        if self.therm_iter > 1:
+            dist_ami = np.mean(dist_ami, axis=2)
+
+        # Round to 3 sign. digits
+        dist_ami[:, 1] = np.around(dist_ami[:, 1], 4)
+
+        # Create matrix
+        dist_hm = self._ami_list_to_matrix(dist_ami, dist_banres)
+
+        return dist_ami, dist_clusters, dist_hm
+
+    def _calc_cor_chain_gt_ang(self, chain, resid):
+        assert isinstance(self.ang_clust_calc, AngleClusterCalculator)
+
+        # extract angle correlation matrices
+        console.h3("Angle clustering")
+        ang_clusters, ang_banres = self.ang_clust_calc.cluster(chain, resid)
+        ang_ami = self._calc_ami_gt(ang_clusters, resid, self.ground_truth_states)
+
+        # Round to 3 sign. digits
+        ang_ami[:, 1] = np.around(ang_ami[:, 1], 4)
+
+        # Create matrix
+        ang_hm = self._ami_list_to_matrix(ang_ami, ang_banres)
 
         return ang_ami, ang_clusters, ang_hm
 
@@ -353,3 +486,30 @@ class CorrelationExtraction:
         best_row_id = np.argmax(corr_sum)
         best_cluster_idx = self.resid.index(best_row_id + self.aaS)  # index conversion
         return clusters[best_cluster_idx, :]
+
+    @staticmethod
+    def _import_cluster_list(ground_truth_file: Union[str, os.PathLike]) -> np.ndarray:
+        file_ext = os.path.splitext(ground_truth_file)[1].strip(".")
+        if file_ext == "json":
+            with open(ground_truth_file, "r") as f:
+                data = json.load(f)
+        elif file_ext == "pkl":
+            with open(ground_truth_file, "rb") as f:
+                data = pickle.load(f)
+        elif file_ext in ("npy", "npz"):
+            data = np.load(ground_truth_file)
+        else:
+            raise ValueError(f"Unsupported file extension: {file_ext}")
+
+        if isinstance(data, np.ndarray):
+            if len(data.shape) > 1:
+                raise ValueError(
+                    "List of clusters must be one-dimensional, found shape", data.shape
+                )
+            return data
+        else:
+            if not isinstance(data, list):
+                raise TypeError(
+                    "Tried to import list of clusters, found type", type(data)
+                )
+            return np.array(data)

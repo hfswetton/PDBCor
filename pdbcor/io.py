@@ -11,6 +11,7 @@ from typing import Any, TYPE_CHECKING, Optional, Union, SupportsFloat, Sequence
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
+from matplotlib.colors import to_hex
 from matplotlib.pyplot import get_cmap
 from matplotlib.ticker import MultipleLocator, AutoMinorLocator, FormatStrFormatter
 
@@ -91,6 +92,7 @@ class CorrelationExtractionChainIO:
         )
         os.makedirs(self.save_path, exist_ok=True)
         self.params = general_io.params
+        self.cmap = get_cmap("viridis")
 
     @classmethod
     def output_path(cls, parent_path, chain_id):
@@ -123,7 +125,7 @@ class CorrelationExtractionChainIO:
 
         if self.params.create_vis_scripts:
             console.print("Creating visualisation scripts...")
-            self._create_vis_scripts(best_clust, feature_name)
+            self._create_vis_scripts(corr_list, best_clust, feature_name)
 
     def _create_data_file(self, corr_list, feature_name):
         df = pd.DataFrame(
@@ -131,6 +133,11 @@ class CorrelationExtractionChainIO:
                 "residue_id_1": corr_list[:, 0].astype("int"),
                 "residue_id_2": corr_list[:, 1].astype("int"),
                 "correlation": corr_list[:, 2],
+            }
+            if corr_list.shape[1] == 3
+            else {
+                "residue_id_1": corr_list[:, 0].astype("int"),
+                "correlation": corr_list[:, 1],
             }
         )
         df.to_feather(
@@ -156,14 +163,14 @@ class CorrelationExtractionChainIO:
             ),
         )
         self._corr_per_resid_bar_plot(
-            corr_matrix,
+            corr_list,
             os.path.join(
                 self.save_path,
                 f"seq_{feature_name[0]}_{self.correlation_extraction.residue_subset}.png",
             ),
         )
 
-    def _create_vis_scripts(self, best_clust, feature_name):
+    def _create_vis_scripts(self, corr_list, best_clust, feature_name):
         self._write_chimera_script(
             best_clust,
             os.path.join(
@@ -171,13 +178,33 @@ class CorrelationExtractionChainIO:
                 f"bundle_vis_chimera_{feature_name[0]}_{self.correlation_extraction.residue_subset}.py",
             ),
         )
-        self._write_pymol_script(
+        self._write_pymol_script_clusters(
             best_clust,
             os.path.join(
                 self.save_path,
                 f"bundle_vis_pymol_{feature_name[0]}_{self.correlation_extraction.residue_subset}.pml",
             ),
         )
+        self._write_pymol_script_correlations(
+            corr_list,
+            best_clust,
+            os.path.join(
+                self.save_path,
+                f"corr_vis_pymol_{feature_name[0]}_{self.correlation_extraction.residue_subset}.pml",
+            ),
+        )
+
+        # No way to get correlation to neighbours only if calculating based on ground truth
+        # -> check if list is shape [ resi_i resi_j corr ] and not only [ resi_i corr ]
+        if corr_list.shape[1] == 3:
+            self._write_pymol_script_correlations_neighbours(
+                corr_list,
+                best_clust,
+                os.path.join(
+                    self.save_path,
+                    f"corr_neighbours_vis_pymol_{feature_name[0]}_{self.correlation_extraction.residue_subset}.pml",
+                ),
+            )
 
     def _write_chimera_script(
         self, best_clust: np.ndarray, file_path: str | os.PathLike
@@ -202,23 +229,81 @@ class CorrelationExtractionChainIO:
                     )
                 )
 
-    def _write_pymol_script(
+    def _pymol_header_lines(self):
+        return [
+            f"load ../../{self.correlation_extraction.pdb_file_name}",
+            "bg_color white",
+            "hide",
+            "show ribbon",
+            "set all_states, true",
+        ]
+
+    def _write_pymol_script_clusters(
         self, best_clust: np.ndarray, file_path: str | os.PathLike
     ) -> None:
         """Construct a PyMOL script to view the calculated clusters in separate colours."""
         state_color = ["0x00FFFF", "0x00008b", "0xFF00FF", "0xFFFF00", "0x000000"]
         with open(file_path, "w") as f:
-            f.write(f"load ../../{self.correlation_extraction.pdb_file_name}\n")
-            f.write("bg_color white\n")
-            f.write("hide\n")
-            f.write("show ribbon\n")
-            f.write("set all_states, true\n")
+            f.writelines([f"{l}\n" for l in self._pymol_header_lines()])
             f.writelines(
                 [
                     f"set ribbon_color, {state_color[int(best_clust[i])]}, all, {i+1}\n"
                     for i in range(len(self.correlation_extraction.structure))
                 ]
             )
+
+    def _avg_corr_to_colour(self, mask, corr_list):
+        """
+        Get the average correlation from `corr_list` using the specified `mask`,
+        and calculate the corresponding colour using `self.cmap`.
+
+        :param mask: rows of `corr_list` to average, in any form that can be used to index an `ndarray`
+        :param corr_list: list of correlation values, either as `[ resi_i resi_j corr ]` or `[ resi_i corr ]`
+        :return: colour hex string, in format `"0xRRGGBB"`
+        """
+        if np.sum(mask) == 0:
+            return "0xeeeeee"
+        corr = corr_list[mask, -1].mean()
+        corr_adj = np.clip(corr, 0, 1).item()
+        c = to_hex(self.cmap(corr_adj))
+        return c.replace("#", "0x")
+
+    def _write_pymol_script_correlations(
+        self,
+        corr_list: np.ndarray,
+        best_clust: np.ndarray,
+        file_path: str | os.PathLike,
+    ) -> None:
+        """Construct a PyMOL script to view the calculated correlation values in separate colours."""
+        pml_lines = self._pymol_header_lines()
+        for r in self.correlation_extraction.resid:
+            mask = corr_list[:, 0] == r
+            c = self._avg_corr_to_colour(mask, corr_list)
+            pml_lines.append(f"set ribbon_color, {c}, resi {r}")
+        with open(file_path, "w") as f:
+            f.write("\n".join(pml_lines))
+
+    def _write_pymol_script_correlations_neighbours(
+        self,
+        corr_list: np.ndarray,
+        best_clust: np.ndarray,
+        file_path: str | os.PathLike,
+    ) -> None:
+        """
+        Construct a PyMOL script to view the calculated correlation values in separate colours,
+        averaging correlations to only direct neigbours instead of all residues.
+        """
+        pml_lines = self._pymol_header_lines()
+        for r in self.correlation_extraction.resid:
+            mask = (
+                (corr_list[:, 0] == r)
+                & (corr_list[:, 1] >= r - 1)
+                & (corr_list[:, 1] <= r + 1)
+            )
+            c = self._avg_corr_to_colour(mask, corr_list)
+            pml_lines.append(f"set ribbon_color, {c}, resi {r}")
+        with open(file_path, "w") as f:
+            f.write("\n".join(pml_lines))
 
     def _plot_heatmaps(self, hm: np.ndarray, path: str | os.PathLike) -> None:
         """Plot the correlation matrix as a heatmap."""
@@ -252,10 +337,10 @@ class CorrelationExtractionChainIO:
     def _plot_hist(ami: np.ndarray, path: str | os.PathLike) -> None:
         """Plot a histogram of correlation parameters (from `ndarray` of pairwise AMI values)."""
         # plot distance correlation histogram
-        start = np.floor(min(ami[:, 2]) * 50) / 50
+        start = np.floor(min(ami[:, -1]) * 50) / 50
         nbreaks = int((1 - start) / 0.02) + 1
         fig, ax = plt.subplots()
-        ax.hist(ami[:, 2], bins=np.linspace(start, 1, nbreaks), density=True)
+        ax.hist(ami[:, -1], bins=np.linspace(start, 1, nbreaks), density=True)
         ax.xaxis.set_minor_locator(MultipleLocator(0.02))
         ax.xaxis.set_major_locator(MultipleLocator(0.1))
         ax.yaxis.set_minor_locator(AutoMinorLocator())
@@ -323,9 +408,19 @@ class CorrelationExtractionChainIO:
         if ind == np.ceil(len(cor_seq) / 50) - 1:
             ax.set_xlabel("Residue ID")
 
-    def _corr_per_resid_bar_plot(self, hm: np.ndarray, path: str | os.PathLike) -> None:
+    def _corr_per_resid_bar_plot(
+        self, corr_list_full: np.ndarray, path: str | os.PathLike
+    ) -> None:
         """Save a bar plot of the average correlation parameter for each residue."""
-        cor_seq = np.mean(np.nan_to_num(hm), axis=0)
+        corr_list_no_nan = np.nan_to_num(corr_list_full)
+        masks = [
+            (corr_list_no_nan[:, 0] == i)
+            for i in range(
+                self.correlation_extraction.aaS, self.correlation_extraction.aaF + 1
+            )
+        ]
+        cor_seq = np.array([np.mean(corr_list_no_nan[mask, -1]) for mask in masks])
+        # cor_seq = np.mean(np.nan_to_num(hm), axis=0)
         fig, axs = plt.subplots(
             nrows=int(np.ceil(len(cor_seq) / 50)),
             ncols=1,
@@ -354,10 +449,10 @@ class CorrelationExtractionChainIO:
 
         # correlation parameters
         avg_dist_cor = (
-            np.mean(dist_corr_list[:, 2]) if dist_corr_list is not None else None
+            np.mean(dist_corr_list[:, -1]) if dist_corr_list is not None else None
         )
         avg_ang_cor = (
-            np.mean(ang_corr_list[:, 2]) if ang_corr_list is not None else None
+            np.mean(ang_corr_list[:, -1]) if ang_corr_list is not None else None
         )
 
         self._write_combined_txt(avg_ang_cor, avg_dist_cor, best_dist_clusters)

@@ -51,6 +51,7 @@ class CLI:
                 input_file_format=(
                     self.args.format if len(self.args.format) > 0 else None
                 ),
+                ground_truth_file=self.args.ground_truth_file,
                 output_directory=self.args.output,
                 io_params=io_params,
                 residue_subset=residue_subset,
@@ -89,6 +90,15 @@ class CLI:
         )
 
         parser.add_argument("bundle", type=str, help="protein bundle file path")
+
+        parser.add_argument(
+            "-c",
+            "--compare",
+            type=str,
+            help='comparison mode (calculate correlation to "ground truth" file contents instead of between residues)',
+            default=None,
+            dest="ground_truth_file",
+        )
 
         io_args = parser.add_argument_group("input/output settings")
         io_args.add_argument(
